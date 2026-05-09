@@ -1,6 +1,6 @@
 "use client";
 
-import { ArrowUp } from "lucide-react";
+import { ArrowUp, Plus } from "lucide-react";
 import {
   forwardRef,
   useCallback,
@@ -32,11 +32,13 @@ export interface ChatInputHandle {
 }
 
 /**
- * Custom chat input — pill-shaped textarea with autoresize and a send
- * button on the right. Keyboard:
+ * Two-row chat input — Cursor-style card with a textarea on top and a
+ * thin toolbar (attach placeholder + send) on the bottom. 16px radius
+ * card, hairline border, no pill-rounding, no shadow.
+ *
+ * Keyboard:
  *   Enter         → submit
  *   Shift+Enter   → newline
- * No styled-jsx, no CopilotKit dependency. Pure React + Tailwind.
  */
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
   function ChatInput(
@@ -58,13 +60,11 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       focus: () => textareaRef.current?.focus(),
     }));
 
-    // Autoresize the textarea: shrink to the natural content height,
-    // capped at ~6 lines.
     const resize = useCallback(() => {
       const el = textareaRef.current;
       if (!el) return;
       el.style.height = "auto";
-      const lineHeight = isLg ? 28 : 22;
+      const lineHeight = isLg ? 26 : 22;
       const max = lineHeight * 6;
       el.style.height = Math.min(el.scrollHeight, max) + "px";
     }, [isLg]);
@@ -99,57 +99,85 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       }
     };
 
-    const formCls = isLg
-      ? "flex items-end gap-3 rounded-3xl border px-5 py-3.5 transition-colors focus-within:border-foreground"
-      : "flex items-end gap-2 rounded-3xl border px-4 py-2.5 transition-colors focus-within:border-foreground";
+    // ----- size-driven class strings ------------------------------------
+    const cardCls = isLg
+      ? "rounded-2xl border transition-colors focus-within:border-foreground"
+      : "rounded-2xl border transition-colors focus-within:border-foreground";
+
+    const textAreaWrapCls = isLg ? "px-5 pt-4 pb-1" : "px-4 pt-3 pb-1";
 
     const textareaCls = isLg
-      ? "flex-1 resize-none border-0 bg-transparent text-[17px] leading-[28px] outline-none placeholder:opacity-50 disabled:opacity-60"
-      : "flex-1 resize-none border-0 bg-transparent text-[15px] leading-[22px] outline-none placeholder:opacity-50 disabled:opacity-60";
+      ? "w-full resize-none border-0 bg-transparent text-[16px] leading-[26px] outline-none placeholder:opacity-50 disabled:opacity-60"
+      : "w-full resize-none border-0 bg-transparent text-[15px] leading-[22px] outline-none placeholder:opacity-50 disabled:opacity-60";
+
+    const toolbarCls = isLg
+      ? "flex items-center gap-2 px-3 py-2"
+      : "flex items-center gap-2 px-2.5 py-1.5";
 
     const sendCls = isLg
-      ? "grid size-11 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30 hover:opacity-80"
-      : "grid size-8 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30 hover:opacity-80";
+      ? "ml-auto grid size-9 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30 hover:opacity-80"
+      : "ml-auto grid size-7 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30 hover:opacity-80";
 
-    const sendIconSize = isLg ? 20 : 16;
+    const sendIconSize = isLg ? 18 : 14;
+
+    const attachCls = isLg
+      ? "grid size-9 place-items-center rounded-full transition-colors hover:bg-muted disabled:opacity-30"
+      : "grid size-7 place-items-center rounded-full transition-colors hover:bg-muted disabled:opacity-30";
+
+    const attachIconSize = isLg ? 18 : 14;
 
     const pillCls = isLg
-      ? "rounded-full border px-4 py-2.5 text-[14px] transition-colors hover:bg-muted disabled:opacity-50"
-      : "rounded-full border px-3 py-1.5 text-[12px] transition-colors hover:bg-muted disabled:opacity-50";
+      ? "rounded-full border px-4 py-2.5 text-[14px] transition-colors hover:bg-muted hover:border-foreground disabled:opacity-50"
+      : "rounded-full border px-3 py-1.5 text-[12px] transition-colors hover:bg-muted hover:border-foreground disabled:opacity-50";
 
     return (
       <div className="w-full">
         <form
           onSubmit={handleSubmit}
-          className={formCls}
+          className={cardCls}
           style={{
             borderColor: "var(--border)",
             background: "var(--background)",
           }}
         >
-          <textarea
-            ref={textareaRef}
-            value={value}
-            onChange={(e) => setValue(e.target.value)}
-            onKeyDown={handleKeyDown}
-            rows={1}
-            placeholder={placeholder}
-            disabled={busy}
-            className={textareaCls}
-            style={{ color: "var(--foreground)" }}
-          />
-          <button
-            type="submit"
-            disabled={!value.trim() || busy}
-            aria-label="Send"
-            className={sendCls}
-            style={{
-              background: "var(--foreground)",
-              color: "var(--background)",
-            }}
-          >
-            <ArrowUp size={sendIconSize} strokeWidth={2.5} />
-          </button>
+          <div className={textAreaWrapCls}>
+            <textarea
+              ref={textareaRef}
+              value={value}
+              onChange={(e) => setValue(e.target.value)}
+              onKeyDown={handleKeyDown}
+              rows={1}
+              placeholder={placeholder}
+              disabled={busy}
+              className={textareaCls}
+              style={{ color: "var(--foreground)" }}
+            />
+          </div>
+
+          <div className={toolbarCls}>
+            <button
+              type="button"
+              aria-label="Attach (coming soon)"
+              disabled
+              className={attachCls}
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              <Plus size={attachIconSize} strokeWidth={2} />
+            </button>
+
+            <button
+              type="submit"
+              disabled={!value.trim() || busy}
+              aria-label="Send"
+              className={sendCls}
+              style={{
+                background: "var(--foreground)",
+                color: "var(--background)",
+              }}
+            >
+              <ArrowUp size={sendIconSize} strokeWidth={2.5} />
+            </button>
+          </div>
         </form>
 
         {suggestions && suggestions.length > 0 ? (
@@ -160,16 +188,17 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
                 : "mt-3 flex flex-wrap justify-center gap-2"
             }
           >
-            {suggestions.map((s) => (
+            {suggestions.map((s, i) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => submit(s)}
                 disabled={busy}
-                className={pillCls}
+                className={`gpilot-pill-in ${pillCls}`}
                 style={{
                   borderColor: "var(--border)",
                   color: "var(--muted-foreground)",
+                  animationDelay: `${300 + i * 80}ms`,
                 }}
               >
                 {s}

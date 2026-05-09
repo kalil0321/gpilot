@@ -62,24 +62,30 @@ function Entry() {
     >
       <div className="flex w-full max-w-2xl flex-col items-center gap-10">
         <div
-          className="text-5xl"
+          className="gpilot-fade-in text-5xl"
           style={{
             color: "var(--foreground)",
             fontWeight: 600,
             letterSpacing: "-0.03em",
+            animationDelay: "0ms",
           }}
         >
           <Logo />
         </div>
 
-        <ChatInput
-          onSubmit={handleSubmit}
-          busy={busy}
-          autoFocus
-          size="lg"
-          placeholder="What do you want to do with your cloud?"
-          suggestions={SUGGESTIONS}
-        />
+        <div
+          className="gpilot-fade-in w-full"
+          style={{ animationDelay: "120ms" }}
+        >
+          <ChatInput
+            onSubmit={handleSubmit}
+            busy={busy}
+            autoFocus
+            size="lg"
+            placeholder="What do you want to do with your cloud?"
+            suggestions={SUGGESTIONS}
+          />
+        </div>
       </div>
     </main>
   );
