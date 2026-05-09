@@ -25,7 +25,7 @@ export function ResourceCard({ resource }: ResourceCardProps) {
   const url = resource.metadata?.url as string | undefined;
 
   return (
-    <Card className="bg-card transition-shadow hover:shadow-sm">
+    <Card className="border-0 bg-card shadow-none transition-colors hover:bg-muted">
       <CardHeader className="pb-3">
         <div className="flex items-start justify-between gap-2">
           <div className="min-w-0">

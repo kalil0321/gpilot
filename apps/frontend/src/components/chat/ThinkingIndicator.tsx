@@ -1,32 +1,57 @@
 "use client";
 
+import { useEffect, useState } from "react";
+
 /**
- * "Agent is thinking" placeholder. Three dots that pulse with a 160ms
- * stagger — communicates "something is happening" during the silent
- * window between the user's submit and the first streamed assistant
- * token. Disappears the moment any assistant content lands.
+ * "Agent is thinking" placeholder. Cycles through a small set of
+ * verbs every ~2.4s while applying the shared `gpilot-shimmer` text
+ * gradient sweep so the whole label feels alive without resorting to
+ * loading dots.
  *
- * No CopilotKit hook here — visibility is parent-driven (just a `busy`
- * flag from `runAgent`).
+ * Visibility is parent-driven (just a `busy` flag from `runAgent`).
  */
+
+const PHRASES = [
+  "Thinking",
+  "Analyzing",
+  "Working on it",
+  "Pulling things together",
+  "One sec",
+];
+
+const ROTATE_MS = 2400;
+
 export function ThinkingIndicator() {
+  const [index, setIndex] = useState(0);
+
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      setIndex((i) => (i + 1) % PHRASES.length);
+    }, ROTATE_MS);
+    return () => window.clearInterval(id);
+  }, []);
+
   return (
     <div
-      className="flex items-center gap-1.5 py-3"
+      className="inline-flex items-center py-3 text-[14px]"
       aria-live="polite"
       aria-label="Thinking"
     >
-      {[0, 1, 2].map((i) => (
-        <span
-          key={i}
-          className="size-1.5 rounded-full"
-          style={{
-            background: "var(--muted-foreground)",
-            animation: `gpilot-thinking-pulse 1.1s ease-in-out infinite`,
-            animationDelay: `${i * 160}ms`,
-          }}
-        />
-      ))}
+      <span
+        key={index}
+        className="gpilot-shimmer gpilot-thinking-fade"
+        style={{
+          backgroundImage:
+            "linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 50%, var(--muted-foreground) 100%)",
+          backgroundSize: "200% 100%",
+          WebkitBackgroundClip: "text",
+          backgroundClip: "text",
+          color: "transparent",
+          fontWeight: 500,
+        }}
+      >
+        {PHRASES[index]}…
+      </span>
     </div>
   );
 }

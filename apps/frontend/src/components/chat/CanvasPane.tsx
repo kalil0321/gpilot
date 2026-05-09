@@ -96,10 +96,18 @@ export function CanvasPane({ open, width, onResize }: CanvasPaneProps) {
       ) : null}
 
       {/* Fixed-width inner so content doesn't reflow as the outer width
-       *  animates. */}
+       *  animates. The dot-grid background lives here so it shows in
+       *  both empty and populated states — cards float on top of it. */}
       <div
         className="flex h-full flex-col"
-        style={{ width, minWidth: width }}
+        style={{
+          width,
+          minWidth: width,
+          backgroundImage:
+            "radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0)",
+          backgroundSize: "16px 16px",
+          backgroundPosition: "0 0",
+        }}
       >
         {hasContent ? (
           <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
@@ -124,38 +132,17 @@ export function CanvasPane({ open, width, onResize }: CanvasPaneProps) {
             ) : null}
           </div>
         ) : (
-          <EmptyDotGrid />
+          <div className="flex flex-1 items-center justify-center">
+            <span
+              className="font-mono text-[10px] uppercase tracking-widest"
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              canvas idle
+            </span>
+          </div>
         )}
       </div>
     </aside>
-  );
-}
-
-/**
- * React-Flow-style empty canvas — radial-gradient dot grid filling
- * the available area. The dots use --border so the pattern reads as
- * "structure, not content"; subtle in light mode, subtle in dark.
- *
- * No actual React Flow dependency: just CSS.
- */
-function EmptyDotGrid() {
-  return (
-    <div
-      className="relative flex flex-1 items-center justify-center"
-      style={{
-        backgroundImage:
-          "radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0)",
-        backgroundSize: "16px 16px",
-        backgroundPosition: "0 0",
-      }}
-    >
-      <span
-        className="font-mono text-[10px] uppercase tracking-widest"
-        style={{ color: "var(--muted-foreground)" }}
-      >
-        canvas idle
-      </span>
-    </div>
   );
 }
 

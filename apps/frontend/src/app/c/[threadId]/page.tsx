@@ -156,18 +156,77 @@ function ChatColumn({
   );
 }
 
+// localStorage keys for per-user UI persistence.
+const LS_DRAWER = "gpilot.drawerOpen";
+const LS_CANVAS = "gpilot.canvasOpen";
+const LS_CANVAS_W = "gpilot.canvasWidth";
+
+function readBool(key: string, fallback: boolean): boolean {
+  if (typeof window === "undefined") return fallback;
+  const raw = window.localStorage.getItem(key);
+  if (raw === null) return fallback;
+  return raw === "true";
+}
+
+function readNum(key: string, fallback: number): number {
+  if (typeof window === "undefined") return fallback;
+  const raw = window.localStorage.getItem(key);
+  if (raw === null) return fallback;
+  const n = Number(raw);
+  return Number.isFinite(n) ? n : fallback;
+}
+
 function ChatLayout() {
   const params = useParams<{ threadId: string }>();
   const threadId = params?.threadId;
   const router = useRouter();
-  // Drawer starts CLOSED on the chat page so the focus is on the
-  // conversation. The user opens it via the menu button in the chat
-  // header (or the existing collapsed-strip chevron on the left edge).
-  const [drawerOpen, setDrawerOpen] = useState(false);
-  // Canvas open + width — controlled here so the chat header's toggle
-  // and the pane's resize handle stay in sync.
-  const [canvasOpen, setCanvasOpen] = useState(true);
-  const [canvasWidth, setCanvasWidth] = useState(420);
+  // Drawer + canvas state persist across reloads via localStorage so a
+  // user who hides the drawer doesn't have it pop back open every
+  // refresh. Defaults: drawer closed, canvas open at 420px.
+  const [drawerOpen, setDrawerOpen] = useState(() => readBool(LS_DRAWER, false));
+  const [canvasOpen, setCanvasOpen] = useState(() => readBool(LS_CANVAS, true));
+  const [canvasWidth, setCanvasWidth] = useState(() => readNum(LS_CANVAS_W, 420));
+
+  // Persist on every change.
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LS_DRAWER, String(drawerOpen));
+    } catch {
+      // ignore (private mode etc.)
+    }
+  }, [drawerOpen]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LS_CANVAS, String(canvasOpen));
+    } catch {
+      // ignore
+    }
+  }, [canvasOpen]);
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LS_CANVAS_W, String(canvasWidth));
+    } catch {
+      // ignore
+    }
+  }, [canvasWidth]);
+
+  // Cmd+B (Ctrl+B on win/linux) toggles the threads drawer — same
+  // shortcut Cursor / VS Code use. We swallow the keystroke so the
+  // browser's default "favourites bar" toggle doesn't fire.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isCmdB =
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "b";
+      if (!isCmdB) return;
+      e.preventDefault();
+      setDrawerOpen((v) => !v);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   if (!threadId) return null;
 

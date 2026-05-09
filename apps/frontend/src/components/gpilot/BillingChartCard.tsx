@@ -41,7 +41,7 @@ export function BillingChartCard({ periods }: BillingChartCardProps) {
 
   if (chartData.length === 0) {
     return (
-      <Card className="bg-card">
+      <Card className="border-0 bg-card shadow-none">
         <CardHeader>
           <CardTitle>Billing</CardTitle>
           <CardDescription>
@@ -54,7 +54,7 @@ export function BillingChartCard({ periods }: BillingChartCardProps) {
   }
 
   return (
-    <Card className="bg-card">
+    <Card className="border-0 bg-card shadow-none">
       <CardHeader>
         <CardTitle>Cost by service</CardTitle>
         <CardDescription>Stacked monthly spend across services.</CardDescription>
