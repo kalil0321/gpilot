@@ -62,81 +62,71 @@ export function CanvasPane({ open, width, onResize }: CanvasPaneProps) {
     };
   }, [dragging, onResize]);
 
-  if (!open) return null;
-
+  // Animated open/close: stay mounted, transition `width` between
+  // `userWidth` and 0. Inner content sits in a fixed-width child so
+  // it doesn't reflow during the animation.
   return (
     <aside
-      className="relative hidden h-screen shrink-0 flex-col overflow-y-auto border-l xl:flex"
+      aria-hidden={!open}
+      className="relative hidden h-screen shrink-0 flex-col overflow-hidden xl:flex"
       style={{
-        width,
-        borderColor: "var(--border)",
+        width: open ? width : 0,
+        borderLeft: open ? "1px solid var(--border)" : "0px solid transparent",
+        transition:
+          "width 220ms cubic-bezier(0.22, 1, 0.36, 1), border-color 220ms",
       }}
     >
-      {/* Resize handle on the left edge */}
+      {/* Resize handle on the left edge — hidden when closed. */}
+      {open ? (
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label="Resize canvas"
+          onMouseDown={(e) => {
+            startXRef.current = e.clientX;
+            startWidthRef.current = width;
+            setDragging(true);
+          }}
+          className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-foreground/10"
+          style={{
+            background: dragging ? "var(--foreground)" : "transparent",
+            opacity: dragging ? 0.15 : 1,
+          }}
+        />
+      ) : null}
+
+      {/* Fixed-width inner so content doesn't reflow as the outer width
+       *  animates. */}
       <div
-        role="separator"
-        aria-orientation="vertical"
-        aria-label="Resize canvas"
-        onMouseDown={(e) => {
-          startXRef.current = e.clientX;
-          startWidthRef.current = width;
-          setDragging(true);
-        }}
-        className="absolute left-0 top-0 z-10 h-full w-1 cursor-col-resize transition-colors hover:bg-foreground/10"
-        style={{
-          background: dragging ? "var(--foreground)" : "transparent",
-          opacity: dragging ? 0.15 : 1,
-        }}
-      />
-
-      <header
-        className="sticky top-0 flex items-center justify-between px-5 py-3"
-        style={{ background: "var(--background)" }}
+        className="flex h-full flex-col"
+        style={{ width, minWidth: width }}
       >
-        <span
-          className="font-mono text-[10px] uppercase tracking-widest"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          canvas
-        </span>
-        {state.sync?.source ? (
-          <span
-            className="rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wide"
-            style={{
-              borderColor: "var(--border)",
-              color: "var(--muted-foreground)",
-            }}
-          >
-            {state.sync.source}
-          </span>
-        ) : null}
-      </header>
+        {hasContent ? (
+          <div className="flex-1 space-y-5 overflow-y-auto px-5 py-4">
+            {state.billing_periods.length > 0 ? (
+              <BillingChartCard periods={state.billing_periods} />
+            ) : null}
 
-      {hasContent ? (
-        <div className="flex-1 space-y-5 px-5 py-3">
-          {state.billing_periods.length > 0 ? (
-            <BillingChartCard periods={state.billing_periods} />
-          ) : null}
-
-          {state.resources.length > 0 ? (
-            <section>
-              <h3
-                className="mb-2 font-mono text-[10px] uppercase tracking-widest"
-                style={{ color: "var(--muted-foreground)" }}
-              >
-                resources · {state.resources.length}
-              </h3>
-              <div className="grid gap-3">
-                {state.resources.map((r) => (
-                  <ResourceCard key={r.id} resource={r} />
-                ))}
-              </div>
-            </section>
-          ) : null}
-        </div>
-      ) : (
-        <EmptyDotGrid />
-      )}
+            {state.resources.length > 0 ? (
+              <section>
+                <h3
+                  className="mb-2 font-mono text-[10px] uppercase tracking-widest"
+                  style={{ color: "var(--muted-foreground)" }}
+                >
+                  resources · {state.resources.length}
+                </h3>
+                <div className="grid gap-3">
+                  {state.resources.map((r) => (
+                    <ResourceCard key={r.id} resource={r} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        ) : (
+          <EmptyDotGrid />
+        )}
+      </div>
     </aside>
   );
 }

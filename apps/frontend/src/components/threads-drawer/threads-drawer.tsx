@@ -6,18 +6,15 @@ import {
   ChevronLeft,
   ChevronRight,
   Filter,
-  Moon,
   Plus,
   Search,
   SquarePen,
-  Sun,
   Trash2,
 } from "lucide-react";
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useThreads } from "@copilotkit/react-core/v2";
 import { Logo } from "@/components/brand/Logo";
-import { useTheme } from "@/hooks/use-theme";
 import styles from "./threads-drawer.module.css";
 
 export interface ThreadsDrawerProps {
@@ -101,26 +98,6 @@ export default function ThreadsDrawer({
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
 
   const [searchQuery, setSearchQuery] = useState("");
-
-  const { setTheme } = useTheme();
-  const [resolvedTheme, setResolvedTheme] = useState<"light" | "dark">("light");
-  useEffect(() => {
-    const update = () => {
-      setResolvedTheme(
-        document.documentElement.classList.contains("dark") ? "dark" : "light",
-      );
-    };
-    update();
-    const observer = new MutationObserver(update);
-    observer.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ["class"],
-    });
-    return () => observer.disconnect();
-  }, []);
-  const toggleTheme = () => {
-    setTheme(resolvedTheme === "dark" ? "light" : "dark");
-  };
 
   const {
     threads,
@@ -291,22 +268,35 @@ export default function ThreadsDrawer({
         className={cx(styles.drawer, styles.drawerClosed)}
       >
         <div className={styles.collapsedRail}>
-          <button
-            aria-label="Open threads drawer"
-            className={styles.iconButton}
-            type="button"
-            onClick={() => setIsOpen(true)}
-          >
-            <ChevronRight size={18} />
-          </button>
-          <button
-            aria-label="New chat"
-            className={styles.iconButton}
-            type="button"
-            onClick={() => onThreadChange(undefined)}
-          >
-            <SquarePen size={18} />
-          </button>
+          <div className={styles.collapsedRailTop}>
+            <button
+              aria-label="Open threads drawer"
+              className={styles.iconButton}
+              type="button"
+              onClick={() => setIsOpen(true)}
+            >
+              <ChevronRight size={18} />
+            </button>
+            <button
+              aria-label="New chat"
+              className={styles.iconButton}
+              type="button"
+              onClick={() => onThreadChange(undefined)}
+            >
+              <SquarePen size={18} />
+            </button>
+            <button
+              aria-label="Search threads"
+              className={styles.iconButton}
+              type="button"
+              onClick={() => setIsOpen(true)}
+            >
+              <Search size={18} />
+            </button>
+          </div>
+          <div className={styles.collapsedRailBottom}>
+            <Logo iconOnly className={styles.collapsedRailLogo} />
+          </div>
         </div>
       </aside>
     );
@@ -329,7 +319,6 @@ export default function ThreadsDrawer({
 
         <div className={styles.drawerSurface}>
           <div className={styles.brandRow}>
-            <Logo className={styles.brandWordmark} />
             <button
               aria-label="Collapse threads drawer"
               className={styles.iconButton}
@@ -561,22 +550,7 @@ export default function ThreadsDrawer({
           </div>
 
           <div className={styles.drawerFooter}>
-            <button
-              aria-label={
-                resolvedTheme === "dark"
-                  ? "Switch to light mode"
-                  : "Switch to dark mode"
-              }
-              className={styles.iconButton}
-              type="button"
-              onClick={toggleTheme}
-            >
-              {resolvedTheme === "dark" ? (
-                <Sun size={16} />
-              ) : (
-                <Moon size={16} />
-              )}
-            </button>
+            <Logo className={styles.brandWordmark} />
           </div>
         </div>
       </aside>
