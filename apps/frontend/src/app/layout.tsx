@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 
-import { Plus_Jakarta_Sans, Spline_Sans_Mono } from "next/font/google";
+import { Figtree, Spline_Sans_Mono } from "next/font/google";
 import { CopilotKitProviderShell } from "@/components/copilot/CopilotKitProviderShell";
 import "./globals.css";
 // v2 owns its own stylesheet. Do NOT import @copilotkit/react-ui/styles.css —
@@ -13,10 +13,10 @@ import "@copilotkit/react-core/v2/styles.css";
 // CopilotKit defaults above.
 import "./copilot-overrides.css";
 
-const jakarta = Plus_Jakarta_Sans({
+const figtree = Figtree({
   subsets: ["latin"],
   display: "swap",
-  variable: "--font-jakarta",
+  variable: "--font-figtree",
 });
 
 const splineMono = Spline_Sans_Mono({
@@ -36,8 +36,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${jakarta.variable} ${splineMono.variable}`}>
-      <body className={`${jakarta.variable} ${splineMono.variable} subpixel-antialiased`}>
+    <html lang="en" className={`${figtree.variable} ${splineMono.variable}`}>
+      <body className={`${figtree.variable} ${splineMono.variable} subpixel-antialiased`}>
         <CopilotKitProviderShell>{children}</CopilotKitProviderShell>
       </body>
     </html>

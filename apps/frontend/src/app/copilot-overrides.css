@@ -257,12 +257,18 @@
 ---------------------------------------------------------------------- */
 [class*="SuggestionPill"],
 [data-testid*="suggestion-pill"] {
+  cursor: pointer !important;
   background: transparent !important;
   border: 1px solid var(--border) !important;
   border-radius: 4px !important;
   font-size: 0.82rem !important;
   padding: 0.35rem 0.7rem !important;
   color: var(--foreground) !important;
+}
+
+[class*="SuggestionPill"]:disabled,
+[data-testid*="suggestion-pill"]:disabled {
+  cursor: not-allowed !important;
 }
 
 [class*="SuggestionPill"]:hover,

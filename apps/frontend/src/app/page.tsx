@@ -6,14 +6,10 @@ import { useCallback, useEffect, useState } from "react";
 import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ChatInput } from "@/components/chat/ChatInput";
+import { ThreadsDrawer } from "@/components/threads-drawer";
+import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
 import { ThemeProvider } from "@/hooks/use-theme";
 
-// Curated to cover both backend tools quickly + read like real prompts
-// the user might actually type. Order: most likely → most varied.
-//   1. fetch_billing (general)
-//   2. list_resources
-//   3. fetch_billing (analysis tone)
-//   4. fetch_billing (specific window)
 const SUGGESTIONS = [
   "Show me my GCP spend",
   "What's running in my project?",
@@ -22,10 +18,13 @@ const SUGGESTIONS = [
 ];
 
 const QUEUED_KEY = "gpilot.queuedMessage";
+const LS_DRAWER = "gpilot.drawerOpen";
 
 /**
- * Entry point — empty state. Logo + chat input + a few starter chips,
- * vertically centered. No threads drawer, no canvas, no chat panel.
+ * Entry point. Logo + chat input + suggestion chips, vertically
+ * centered inside the main panel of the standard threads-drawer
+ * layout. The drawer reuses the same component as `/c/[threadId]` so
+ * thread history is one click away from the start screen.
  *
  * Submit creates a fresh threadId, stashes the typed message in
  * sessionStorage under `gpilot.queuedMessage`, then navigates to
@@ -40,9 +39,43 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+function readBool(key: string, fallback: boolean): boolean {
+  if (typeof window === "undefined") return fallback;
+  const raw = window.localStorage.getItem(key);
+  if (raw === null) return fallback;
+  return raw === "true";
+}
+
 function Entry() {
   const router = useRouter();
   const [busy, setBusy] = useState(false);
+
+  // Drawer open/closed state — persisted to localStorage with the same
+  // key as the chat page, so toggling it on either screen carries over.
+  const [drawerOpen, setDrawerOpen] = useState(() => readBool(LS_DRAWER, false));
+  useEffect(() => {
+    try {
+      window.localStorage.setItem(LS_DRAWER, String(drawerOpen));
+    } catch {
+      // ignore
+    }
+  }, [drawerOpen]);
+
+  // Cmd+B / Ctrl+B toggles the drawer — same shortcut as the chat page.
+  useEffect(() => {
+    const onKeyDown = (e: KeyboardEvent) => {
+      const isCmdB =
+        (e.metaKey || e.ctrlKey) &&
+        !e.shiftKey &&
+        !e.altKey &&
+        e.key.toLowerCase() === "b";
+      if (!isCmdB) return;
+      e.preventDefault();
+      setDrawerOpen((v) => !v);
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, []);
 
   const handleSubmit = useCallback(
     (text: string) => {
@@ -64,59 +97,89 @@ function Entry() {
   );
 
   return (
-    <main
-      className="relative flex min-h-screen flex-col px-6"
-      style={{ background: "var(--background)" }}
-    >
-      {/* Top bar: brand mark on the left, theme toggle on the right */}
-      <div className="flex items-center justify-between py-5">
-        <div
-          className="gpilot-fade-in text-[15px]"
+    <div className={drawerStyles.layout}>
+      <ThreadsDrawer
+        agentId="default"
+        threadId={undefined}
+        onThreadChange={(next) => {
+          if (next !== undefined) router.push(`/c/${next}`);
+          // next === undefined ("new chat" from inside drawer) just
+          // closes the drawer and stays on entry — we're already on /.
+        }}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+      />
+      <main
+        className={`${drawerStyles.mainPanel} relative flex flex-col`}
+        style={{ background: "var(--background)" }}
+      >
+        {/* Top bar — same chrome row + horizontal padding as the
+            drawer's drawerChromeRow so the logo and theme toggle line
+            up exactly with the drawer header (PanelLeftOpen icon row
+            on the left). */}
+        <header
+          className="flex shrink-0 items-center justify-between px-3"
           style={{
-            color: "var(--foreground)",
-            fontWeight: 600,
-            letterSpacing: "-0.01em",
-            animationDelay: "0ms",
+            height: "var(--app-chrome-row-height)",
+            background: "var(--background)",
           }}
         >
-          <Logo />
-        </div>
-        <div className="gpilot-fade-in" style={{ animationDelay: "60ms" }}>
-          <ThemeToggle />
-        </div>
-      </div>
+          {/* When the drawer is open it shows its own brand mark in
+              its chrome row — duplicating the logo here would put two
+              "gpilot." marks side-by-side. We hide ours in that
+              state. */}
+          {drawerOpen ? (
+            <span aria-hidden />
+          ) : (
+            <div
+              className="gpilot-fade-in text-[15px]"
+              style={{
+                color: "var(--foreground)",
+                fontWeight: 600,
+                letterSpacing: "-0.01em",
+                animationDelay: "0ms",
+              }}
+            >
+              <Logo />
+            </div>
+          )}
+          <div className="gpilot-fade-in" style={{ animationDelay: "60ms" }}>
+            <ThemeToggle />
+          </div>
+        </header>
 
-      {/* Centered hero: greeting + input + suggestions */}
-      <div className="flex flex-1 items-center justify-center">
-        <div className="flex w-full max-w-2xl flex-col items-stretch gap-6 pb-20">
-          <h1
-            className="gpilot-fade-in text-center text-[28px] tracking-tight sm:text-[32px]"
-            style={{
-              color: "var(--foreground)",
-              fontWeight: 500,
-              letterSpacing: "-0.02em",
-              animationDelay: "100ms",
-            }}
-          >
-            Where do we start{getGreetingPunctuation()}
-          </h1>
+        {/* Centered hero: greeting + input + suggestions */}
+        <div className="flex flex-1 items-center justify-center px-6">
+          <div className="flex w-full max-w-2xl flex-col items-stretch gap-6 pb-20">
+            <h1
+              className="gpilot-fade-in text-center text-[28px] tracking-tight sm:text-[32px]"
+              style={{
+                color: "var(--foreground)",
+                fontWeight: 500,
+                letterSpacing: "-0.02em",
+                animationDelay: "100ms",
+              }}
+            >
+              Where do we start{getGreetingPunctuation()}
+            </h1>
 
-          <div
-            className="gpilot-fade-in w-full"
-            style={{ animationDelay: "180ms" }}
-          >
-            <ChatInput
-              onSubmit={handleSubmit}
-              busy={busy}
-              autoFocus
-              size="lg"
-              placeholder="Ask gpilot to fetch billing, list resources, or deploy a service…"
-              suggestions={SUGGESTIONS}
-            />
+            <div
+              className="gpilot-fade-in w-full"
+              style={{ animationDelay: "180ms" }}
+            >
+              <ChatInput
+                onSubmit={handleSubmit}
+                busy={busy}
+                autoFocus
+                size="lg"
+                placeholder="Ask gpilot to fetch billing, list resources, or deploy a service…"
+                suggestions={SUGGESTIONS}
+              />
+            </div>
           </div>
         </div>
-      </div>
-    </main>
+      </main>
+    </div>
   );
 }
 

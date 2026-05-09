@@ -44,6 +44,38 @@ class _BillingPeriod(TypedDict, total=False):
     cost_usd: float
 
 
+class _SandboxMeta(TypedDict, total=False):
+    id: str
+    status: str  # "running" | "stopped"
+    workspace: str
+    image: str
+    started_at: str
+
+
+class _TerminalEntry(TypedDict, total=False):
+    id: str
+    command: str
+    cwd: str
+    stdout: str
+    stderr: str
+    exit_code: int
+    duration_ms: int
+    ts: str
+
+
+class _SandboxFile(TypedDict, total=False):
+    path: str
+    bytes: int
+    ts: str
+    kind: str  # "write" | "read" | "clone"
+
+
+class _SandboxPreview(TypedDict, total=False):
+    port: int
+    url: str
+    started_at: str
+
+
 def _replace(_left: Any, right: Any) -> Any:
     """Reducer: always take the most recent value (last-write-wins)."""
     return right
@@ -61,6 +93,16 @@ class GCPCanvasState(AgentState):
     selected_resource_id: NotRequired[Annotated[Optional[str], _replace]]
     header: NotRequired[Annotated[_Header, _replace]]
     sync: NotRequired[Annotated[_SyncMeta, _replace]]
+    # Daytona sandbox slots — populated by sandbox_* tools.
+    sandbox: NotRequired[Annotated[_SandboxMeta, _replace]]
+    terminal_log: NotRequired[Annotated[list[_TerminalEntry], _replace]]
+    sandbox_files: NotRequired[Annotated[list[_SandboxFile], _replace]]
+    sandbox_preview: NotRequired[Annotated[Optional[_SandboxPreview], _replace]]
+
+    # Agent-generated UI — populated by render_ui. The shape is
+    # intentionally `list[dict]` so the agent can emit arbitrary widget
+    # specs; the React side validates per-widget at render time.
+    dynamic_widgets: NotRequired[Annotated[list[dict[str, Any]], _replace]]
 
 
 class GCPStateMiddleware(AgentMiddleware[GCPCanvasState, Any]):  # type: ignore[type-arg]

@@ -144,9 +144,11 @@ class GCPStore:
     ) -> tuple[List[Dict[str, Any]], str]:
         """Return resources + source label for THIS call.
 
-        Live Cloud Run services + project info get merged with seeded
-        non-compute resources (BQ datasets, GCS buckets) so the canvas
-        stays full while we add per-product MCPs.
+        Live-only: returns the user's actual project info + Cloud Run
+        services. We deliberately do NOT pad with seeded BQ datasets /
+        GCS buckets anymore — better an honest empty canvas than fake
+        cards. Add per-product MCPs (BigQuery datasets list, GCS bucket
+        list) here when we want richer real data.
 
         The two live calls (services list + project describe) are
         independent, so we run them in parallel via threads. That
@@ -154,17 +156,15 @@ class GCPStore:
         spawn is ~2.5s — see _run_sync's per-call session model).
         """
         if not gcp_mcp.has_gcloud():
-            return self._seed.resources(), "seed"
+            return [], "seed"
 
         from concurrent.futures import ThreadPoolExecutor
 
-        def _safe_services() -> List[Dict[str, Any]]:
+        def _safe_list(fn, *args, **kwargs) -> List[Dict[str, Any]]:
             try:
-                return gcp_integration.fetch_run_services(
-                    project_id=self._project_id
-                )
-            except Exception:  # noqa: BLE001
-                return []
+                return fn(*args, **kwargs) or []
+            except Exception:  # noqa: BLE001 — independent calls; Compute API
+                return []      # may not be enabled, etc.
 
         def _safe_project() -> Optional[Dict[str, Any]]:
             try:
@@ -172,26 +172,39 @@ class GCPStore:
             except Exception:  # noqa: BLE001
                 return None
 
-        with ThreadPoolExecutor(max_workers=2) as pool:
-            f_services = pool.submit(_safe_services)
+        # Fan out the four independent gcloud calls. The API roundtrips
+        # are the long tail (~150-500ms each), so parallelizing roughly
+        # cuts wall-time in 4. Failures per-call are absorbed: if the
+        # Compute API isn't enabled in the project, that call returns
+        # [] without aborting the rest.
+        with ThreadPoolExecutor(max_workers=4) as pool:
             f_project = pool.submit(_safe_project)
-            services = f_services.result()
+            f_services = pool.submit(
+                _safe_list,
+                gcp_integration.fetch_run_services,
+                project_id=self._project_id,
+            )
+            f_vms = pool.submit(
+                _safe_list,
+                gcp_integration.fetch_compute_instances,
+                project_id=self._project_id,
+            )
+            f_buckets = pool.submit(
+                _safe_list,
+                gcp_integration.fetch_gcs_buckets,
+                project_id=self._project_id,
+            )
             project = f_project.result()
+            services = f_services.result()
+            vms = f_vms.result()
+            buckets = f_buckets.result()
 
-        # Both failed → seed everything.
-        if project is None and not services:
-            return self._seed.resources(), "seed"
-
-        non_compute_seeds = [
-            r
-            for r in self._seed.resources()
-            if r.get("type") not in {"service", "project"}
-        ]
         out: List[Dict[str, Any]] = []
         if project:
             out.append(project)
         out.extend(services)
-        out.extend(non_compute_seeds)
+        out.extend(vms)
+        out.extend(buckets)
         return out, "gcp"
 
     def source_label(self) -> str:
@@ -243,19 +256,37 @@ def get_store() -> Store:
 def boot_status() -> str:
     """One-line health summary for the agent's boot log + system prompt.
 
-    Format mirrors the deleted lead_store's: `source=<label> ...`. The
-    leading `source=` token is stable so the agent can reason about the
-    mode in its prompt.
+    Format: `source=<label> project=<id> billing_dataset=<id>
+            billing_rows=<n> resources=<n> as_of=<iso>`. The agent
+    pattern-matches on these k=v pairs to compose BigQuery SQL — in
+    particular, `project` + `billing_dataset` are how it builds the
+    fully-qualified `<project>.<dataset>.gcp_billing_export_v1_*` table
+    reference without having to guess.
     """
     store = get_store()
     label = store.source_label()
+
+    project = os.getenv("GCP_PROJECT_ID", "").strip() or "unset"
+    dataset_env = os.getenv("GCP_BILLING_DATASET", "billing_export").strip()
+    # Mirror the qualification logic in get_store(): if the user passed
+    # a bare dataset name, prepend the project.
+    if project != "unset" and "." not in dataset_env:
+        dataset_qualified = f"{project}.{dataset_env}"
+    else:
+        dataset_qualified = dataset_env
+
     try:
         n_billing = len(store.billing_periods(months=2))
         n_resources = len(store.resources())
     except Exception as e:  # noqa: BLE001 - never block boot
-        return f"source={label} error: {e}"
+        return (
+            f"source={label} project={project} "
+            f"billing_dataset={dataset_qualified} error: {e}"
+        )
 
     when = datetime.now(timezone.utc).isoformat(timespec="seconds")
     return (
-        f"source={label} billing_rows={n_billing} resources={n_resources} as_of={when}"
+        f"source={label} project={project} "
+        f"billing_dataset={dataset_qualified} "
+        f"billing_rows={n_billing} resources={n_resources} as_of={when}"
     )

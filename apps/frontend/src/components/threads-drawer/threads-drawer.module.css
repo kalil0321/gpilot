@@ -15,6 +15,7 @@
   min-height: 100svh;
   height: 100dvh;
   background: var(--sidebar);
+  border-right: 1px solid var(--border);
   transition: width 180ms ease;
   isolation: isolate;
 }
@@ -80,89 +81,281 @@
   color: var(--muted-foreground);
 }
 
-/* Top bar: text "New" + minimal underline search (chat-input style). */
+/* Top bar — chrome row aligns with chat + canvas headers; new chat row below. */
 .topBar {
-  padding: 0.625rem 0.75rem 0.45rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  padding: 0 0 0.4rem;
 }
 
-.topBarRow {
+.drawerChromeRow {
+  box-sizing: border-box;
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
+  width: 100%;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.35rem;
+  min-height: var(--app-chrome-row-height);
+  height: var(--app-chrome-row-height);
+  padding: 0 0.75rem;
+  flex-shrink: 0;
+}
+
+.drawerChromeRowCollapsedRail {
+  justify-content: center;
+  padding-inline: 0.125rem;
+  gap: 0;
+}
+
+.newChatToolbarRow {
+  display: flex;
+  width: 100%;
+  padding: 0 0.65rem;
+}
+
+.drawerToggleButton {
+  flex: none;
+  width: 2.125rem;
+  height: 2.125rem;
 }
 
 .newChatButton {
-  flex: none;
-  padding: 0.2rem 0.05rem 0.35rem;
-  border: 0;
-  border-bottom: 1px solid transparent;
-  background: transparent;
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 0.5rem;
+  /* Slightly lifted from --sidebar using --muted (light + dark safe). */
+  background: color-mix(in oklab, var(--muted) 34%, var(--sidebar));
+  color: var(--sidebar-foreground);
+  box-shadow: inset 0 1px 0
+      color-mix(in oklab, var(--foreground) 5%, transparent),
+    0 1px 2px color-mix(in oklab, var(--foreground) 4%, transparent);
   font-family: var(--font-body);
-  font-size: 0.8rem;
+  font-size: 0.8125rem;
   font-weight: 600;
   letter-spacing: -0.02em;
-  color: var(--sidebar-foreground);
   cursor: pointer;
   transition:
-    color 120ms ease,
-    border-color 120ms ease,
-    opacity 120ms ease;
+    background-color 140ms ease,
+    transform 100ms ease,
+    box-shadow 140ms ease;
 }
 
 .newChatButton:hover,
 .newChatButton:focus-visible {
-  color: var(--foreground);
-  border-bottom-color: color-mix(in oklab, var(--foreground) 35%, transparent);
+  background: color-mix(in oklab, var(--muted) 48%, var(--sidebar));
+  filter: none;
+  box-shadow: inset 0 1px 0
+      color-mix(in oklab, var(--foreground) 8%, transparent),
+    0 2px 6px color-mix(in oklab, var(--foreground) 8%, transparent);
+}
+
+.newChatButton:active {
+  transform: scale(0.985);
 }
 
 .newChatButton:focus-visible {
   outline: 2px solid var(--ring);
-  outline-offset: 3px;
-  border-bottom-color: transparent;
+  outline-offset: 2px;
 }
 
-.searchUnderline {
-  flex: 1;
-  min-width: 0;
-  border-bottom: 1px solid
-    color-mix(in oklab, var(--border) 85%, var(--sidebar-foreground));
-  transition: border-color 140ms ease;
+.newChatButtonInner {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.42rem;
+  padding: 0.5rem 0.65rem 0.56rem;
 }
 
-.searchUnderline:focus-within {
-  border-bottom-color: var(--foreground);
+.newChatButtonIcon {
+  flex: none;
+  opacity: 0.95;
 }
 
-.searchUnderlineInput {
-  display: block;
-  width: 100%;
-  padding: 0.2rem 0 0.35rem;
-  border: 0;
+/* Dark: retain depth on near-sidebar gray */
+:global(.dark) .newChatButton {
+  box-shadow: inset 0 1px 0
+      color-mix(in oklab, var(--foreground) 8%, transparent),
+    0 1px 3px rgb(0 0 0 / 0.4);
+}
+
+:global(.dark) .newChatButton:hover,
+:global(.dark) .newChatButton:focus-visible {
+  box-shadow: inset 0 1px 0
+      color-mix(in oklab, var(--foreground) 12%, transparent),
+    0 2px 10px rgb(0 0 0 / 0.45);
+}
+
+.threadListSectionLabel {
   margin: 0;
-  background: transparent;
-  outline: none;
+  margin-top: 0.85rem;
+  padding: 0 0.65rem;
   font-family: var(--font-body);
-  font-size: 0.8rem;
-  font-weight: 400;
-  letter-spacing: -0.015em;
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--sidebar-muted);
+  line-height: 1.3;
+}
+
+.drawerBrandButtonOpen {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: flex-start;
+  margin: 0 0 0.4rem;
+  padding: 0.3rem 0.45rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  /* Use the sidebar's foreground token so the brand mark stays
+     monochrome in both themes (white on dark, black on light) — the
+     previous --chart-3 token leaked a teal/blue accent that fought
+     the rest of the minimalist palette. */
+  color: var(--sidebar-foreground);
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.drawerBrandButtonOpen:hover,
+.drawerBrandButtonOpen:focus-visible {
+  background: var(--sidebar-hover);
+}
+
+.drawerBrandButtonOpen:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
+}
+
+.drawerBrandLogoOpen {
+  font-size: 1.0625rem;
+}
+
+.drawerBrandButtonOpen.drawerBrandInChrome {
+  flex: 1;
+  width: auto;
+  min-width: 0;
+  margin: 0;
+  padding: 0.2rem 0.35rem;
+}
+
+.mockUserButton {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  gap: 0.55rem;
+  padding: 0.4rem 0.45rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 120ms ease;
+}
+
+.mockUserButton:hover,
+.mockUserButton:focus-visible {
+  background: var(--sidebar-hover);
+}
+
+.mockUserAvatar {
+  flex: none;
+  display: flex;
+  width: 2rem;
+  height: 2rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(
+    in oklab,
+    var(--muted) 85%,
+    var(--sidebar-foreground)
+  );
+  font-size: 0.62rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
   color: var(--sidebar-foreground);
 }
 
-.searchUnderlineInput::placeholder {
-  color: var(--sidebar-muted);
-  opacity: 0.75;
+.mockUserAvatarSmall {
+  display: flex;
+  width: 1.75rem;
+  height: 1.75rem;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: color-mix(
+    in oklab,
+    var(--muted) 85%,
+    var(--sidebar-foreground)
+  );
+  font-size: 0.55rem;
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--sidebar-foreground);
 }
 
-.searchUnderlineInput::-webkit-search-cancel-button {
-  appearance: none;
+.mockUserButtonCollapsed {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.125rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  cursor: pointer;
+  transition: background-color 120ms ease;
 }
 
-.brandWordmark {
-  font-size: 0.95rem;
+.mockUserButtonCollapsed:hover,
+.mockUserButtonCollapsed:focus-visible {
+  background: var(--sidebar-hover);
+}
+
+.mockUserText {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 0.06rem;
+  line-height: 1.2;
+}
+
+.mockUserName {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.8125rem;
   font-weight: 600;
-  letter-spacing: -0.01em;
-  color: var(--foreground);
-  padding-left: 0.125rem;
+  letter-spacing: -0.02em;
+  color: var(--sidebar-foreground);
+}
+
+.mockUserEmail {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 0.68rem;
+  color: var(--sidebar-muted);
+}
+
+.mockUserCaret {
+  flex: none;
+  color: var(--sidebar-muted);
+  opacity: 0.85;
+}
+
+.mockUserButton:focus-visible,
+.mockUserButtonCollapsed:focus-visible {
+  outline: 2px solid var(--ring);
+  outline-offset: 2px;
 }
 
 .iconButton {
@@ -180,7 +373,6 @@
     color 140ms ease;
   cursor: pointer;
 }
-
 .iconButton:hover,
 .iconButton:focus-visible {
   background: var(--sidebar-hover);
@@ -384,7 +576,7 @@
   min-height: 2.5rem;
   padding: 0.4rem 0.5rem 0.45rem;
   border: 0;
-  border-radius: 0.375rem;
+  border-radius: 0;
   background: transparent;
   color: inherit;
   text-align: left;
@@ -401,13 +593,15 @@
 
 .threadRow:hover .threadItem,
 .threadRow:focus-within .threadItem {
-  padding-right: 3.35rem;
+  padding-right: 2.35rem;
 }
 
 .threadItemSelected,
 .threadItemSelected:hover {
-  background: color-mix(in oklab, var(--muted) 88%, transparent);
-  box-shadow: inset 2px 0 0 0 var(--foreground);
+  background: color-mix(in oklab, var(--muted) 55%, transparent);
+  /* Sharp left rail only — no border-radius, or the inset bar rounds and
+   * the row background reads as a shifting “pill”. */
+  box-shadow: inset 3px 0 0 0 var(--foreground);
 }
 
 .threadItemAnimatingIn {
@@ -467,31 +661,8 @@
   transform-origin: left center;
 }
 
-.threadMeta {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-size: 0.7rem;
-  color: var(--sidebar-muted);
-}
-
 .threadItemArchived .threadTitle {
   color: var(--sidebar-muted);
-}
-
-.archivedBadge {
-  display: inline-block;
-  margin-left: 0.35rem;
-  padding: 0.06rem 0.32rem;
-  border-radius: 0.25rem;
-  border: 1px solid color-mix(in oklab, var(--sidebar-muted) 45%, transparent);
-  background: transparent;
-  font-size: 0.58rem;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  text-transform: uppercase;
-  color: var(--sidebar-muted);
-  vertical-align: middle;
 }
 
 .loadMoreButton {
@@ -634,24 +805,24 @@
   width: 100%;
   height: 100%;
   flex-direction: column;
-  align-items: center;
+  align-items: stretch;
   justify-content: space-between;
-  padding: 1rem 0;
+  padding: 0;
 }
 
-.collapsedRailTop {
+.collapsedRailLeading {
   display: flex;
+  width: 100%;
   flex-direction: column;
   align-items: center;
-  gap: 0.25rem;
-  width: 100%;
+  flex-shrink: 0;
 }
 
-.collapsedRailDivider {
-  width: 1.25rem;
-  height: 1px;
-  background: var(--border);
-  margin: 0.25rem 0;
+.collapsedNewChatWrap {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  padding: 0.5rem 0 0.25rem;
 }
 
 .collapsedRailBottom {
@@ -659,30 +830,18 @@
   flex-direction: column;
   align-items: center;
   padding-bottom: 0.5rem;
-  border-top: 1px solid var(--border);
-  padding-top: 0.75rem;
+  padding-top: 0.5rem;
   width: 100%;
-}
-
-.collapsedRailLogo {
-  font-size: 0.875rem;
-  color: var(--foreground);
-  opacity: 0.7;
-  transition: opacity 120ms;
-}
-
-.collapsedRailLogo:hover {
-  opacity: 1;
 }
 
 .drawerFooter {
   display: flex;
   align-items: center;
   justify-content: flex-start;
+  width: 100%;
   gap: 0.5rem;
   margin-top: auto;
   padding: 0.875rem 1rem;
-  border-top: 1px solid var(--border);
 }
 
 .navItemFlex {

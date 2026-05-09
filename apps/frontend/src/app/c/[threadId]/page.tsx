@@ -12,11 +12,11 @@ import {
 import { CanvasPane } from "@/components/chat/CanvasPane";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ChatMessages } from "@/components/chat/ChatMessages";
-import { Logo } from "@/components/brand/Logo";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ThreadsDrawer } from "@/components/threads-drawer";
 import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
 import { ThemeProvider } from "@/hooks/use-theme";
+import { WidgetActionsProvider } from "@/lib/gpilot/widget-actions";
 
 const QUEUED_KEY = "gpilot.queuedMessage";
 
@@ -39,140 +39,63 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+/**
+ * Best-effort detector for "this thread URL is unusable" errors —
+ * either the thread was deleted (404 / THREAD_NOT_FOUND) or the
+ * threadId is malformed (400 / VALIDATION_ERROR). Both cases mean
+ * the user should be bounced back to entry rather than left on a
+ * page that keeps spamming the BFF.
+ *
+ * The error surfaces via two different layers depending on how the
+ * BFF wraps it (PlatformRequestError vs raw fetch reject), so we
+ * sniff multiple shapes: HTTP status code, plus a message-substring
+ * fallback for cases where status got dropped during JSON-stringify.
+ *
+ * We deliberately do NOT redirect on generic network failures
+ * (LangGraph down, BFF unreachable, fetch failed) — those are
+ * transient and the user should see the broken state, not get
+ * bounced without context.
+ */
+function isUnusableThreadError(err: unknown): boolean {
+  if (!err) return false;
+  if (typeof err === "object" && err !== null) {
+    const anyErr = err as { status?: number; message?: string };
+    if (anyErr.status === 404 || anyErr.status === 400) return true;
+    const msg = anyErr.message ?? "";
+    if (
+      msg.includes("THREAD_NOT_FOUND") ||
+      msg.includes("Thread not found") ||
+      msg.includes("VALIDATION_ERROR")
+    ) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function ChatColumn({
-  threadId,
+  busy,
+  connecting,
+  onSubmit,
   canvasOpen,
   onToggleCanvas,
 }: {
-  threadId: string;
+  busy: boolean;
+  connecting: boolean;
+  onSubmit: (text: string) => Promise<void> | void;
   canvasOpen: boolean;
   onToggleCanvas: () => void;
 }) {
-  const router = useRouter();
-  const { agent } = useAgent();
-  const { copilotkit } = useCopilotKit();
-
-  const [busy, setBusy] = useState(false);
-  // A "new thread" is one we just minted on `/` and navigated here with
-  // a queued message in sessionStorage. The backend doesn't have the
-  // thread yet, so connectAgent would 404 and the skeleton would flash
-  // for nothing. We detect newness synchronously in useState init so
-  // the first paint already knows to skip the loading state.
-  const [isNewThread] = useState(() => {
-    if (typeof window === "undefined") return false;
-    try {
-      return window.sessionStorage.getItem(QUEUED_KEY) !== null;
-    } catch {
-      return false;
-    }
-  });
-  const [connecting, setConnecting] = useState(() => !isNewThread);
-  const flushedQueueRef = useRef(false);
-
-  // Hydrate the thread's message history on mount / threadId change.
-  // CopilotChat does this internally; we have a custom chat surface so
-  // we must call connectAgent ourselves — without it `agent.messages`
-  // stays empty after a page refresh and prior turns are invisible.
-  // Pattern mirrored from @copilotkit/react-core/v2/CopilotChat.tsx
-  // (the connectAgent block around line 220).
-  useEffect(() => {
-    if (!agent || !threadId) return;
-    // Brand-new thread (minted on the entry page, not yet on the
-    // backend): skip connectAgent. There's nothing to load and a 404
-    // would still flash the skeleton for ~300ms. The threadId still
-    // gets assigned to the agent so runAgent uses it.
-    const a = agent as typeof agent & { abortController?: AbortController };
-    a.threadId = threadId as string;
-    if (isNewThread) {
-      setConnecting(false);
-      return;
-    }
-
-    let detached = false;
-    setConnecting(true);
-    const ctl = new AbortController();
-    // HttpAgent reads from .abortController; setting it lets us cancel
-    // the in-flight connect on unmount / threadId change.
-    if ("abortController" in a) {
-      a.abortController = ctl;
-    }
-    copilotkit
-      .connectAgent({ agent })
-      .catch((err: unknown) => {
-        if (!detached) console.error("connectAgent failed", err);
-      })
-      .finally(() => {
-        if (!detached) setConnecting(false);
-      });
-    return () => {
-      detached = true;
-      try {
-        ctl.abort();
-      } catch {
-        // ignore
-      }
-    };
-  }, [agent, threadId, copilotkit, isNewThread]);
-
-  const sendMessage = useCallback(
-    async (text: string) => {
-      if (!agent || !text.trim() || busy) return;
-      setBusy(true);
-      try {
-        const id =
-          typeof crypto !== "undefined" && "randomUUID" in crypto
-            ? crypto.randomUUID()
-            : `msg-${Date.now()}`;
-        agent.addMessage({ id, role: "user", content: text });
-        await copilotkit.runAgent({ agent });
-      } catch (err) {
-        console.error("runAgent failed", err);
-      } finally {
-        setBusy(false);
-      }
-    },
-    [agent, busy, copilotkit],
-  );
-
-  // Flush any queued message from the entry point on mount (one-time).
-  // CRITICAL: must run AFTER connectAgent settles. Otherwise we have a
-  // race: connect's "messages snapshot from server" lands mid-stream
-  // and wipes the user message we just added, so runAgent sends an
-  // empty contents list to Gemini and the API rejects with
-  // "contents are required". Gating on `!connecting` makes the flush
-  // wait for connect to finish (success or fail — either way it's safe
-  // to populate the thread).
-  useEffect(() => {
-    if (flushedQueueRef.current) return;
-    if (!agent || connecting) return;
-    let queued: string | null = null;
-    try {
-      queued = sessionStorage.getItem(QUEUED_KEY);
-      if (queued) sessionStorage.removeItem(QUEUED_KEY);
-    } catch {
-      // ignore
-    }
-    if (queued) {
-      flushedQueueRef.current = true;
-      void sendMessage(queued);
-    }
-  }, [agent, connecting, sendMessage]);
-
   return (
     <div className="flex h-screen flex-1 flex-col overflow-hidden">
       <header
-        className="flex items-center justify-between border-b px-4 py-3"
-        style={{ borderColor: "var(--border)" }}
+        className="flex shrink-0 items-center justify-between px-3"
+        style={{
+          height: "var(--app-chrome-row-height)",
+          background: "var(--background)",
+        }}
       >
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="text-[14px] transition-opacity hover:opacity-80"
-          style={{ color: "var(--foreground)" }}
-          title="New chat"
-        >
-          <Logo />
-        </button>
+        <ThemeToggle />
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -189,7 +112,6 @@ function ChatColumn({
               <ChevronsLeft size={14} />
             )}
           </button>
-          <ThemeToggle />
         </div>
       </header>
 
@@ -197,10 +119,210 @@ function ChatColumn({
 
       <div className="px-4 pb-3 pt-1">
         <div className="mx-auto max-w-3xl">
-          <ChatInput onSubmit={sendMessage} busy={busy} autoFocus />
+          <ChatInput onSubmit={onSubmit} busy={busy} autoFocus />
         </div>
       </div>
     </div>
+  );
+}
+
+/**
+ * Inner shell that owns all agent state — connect, run, queue-flush,
+ * busy. Lives INSIDE `<CopilotChatConfigurationProvider>` so `useAgent`
+ * and `useCopilotKit` resolve.
+ *
+ * sendMessage is exposed two ways:
+ *   1. As `onSubmit` to ChatColumn for the chat input.
+ *   2. Through `<WidgetActionsProvider>` so interactive widgets on the
+ *      canvas (buttons, etc.) can dispatch synthetic prompts when the
+ *      user clicks. Both paths share the same `busy` state so a click
+ *      while the agent is mid-run is a no-op.
+ *
+ * We `key={threadId}` this component from the outer ChatLayout so all
+ * useState/useRef reset cleanly per-thread (no message bleed, no
+ * stuck queue-flush guard).
+ */
+function ChatLayoutInner({
+  threadId,
+  canvasOpen,
+  onToggleCanvas,
+  canvasWidth,
+  onCanvasResize,
+  onCanvasOpen,
+}: {
+  threadId: string;
+  canvasOpen: boolean;
+  onToggleCanvas: () => void;
+  canvasWidth: number;
+  onCanvasResize: (w: number) => void;
+  onCanvasOpen: () => void;
+}) {
+  const router = useRouter();
+  const { agent } = useAgent();
+  const { copilotkit } = useCopilotKit();
+
+  const [busy, setBusy] = useState(false);
+  const [isNewThread] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.sessionStorage.getItem(QUEUED_KEY) !== null;
+    } catch {
+      return false;
+    }
+  });
+  const [connecting, setConnecting] = useState(() => !isNewThread);
+  const flushedQueueRef = useRef(false);
+
+  // Hydrate the thread's message history on mount.
+  //
+  // The agent (from useAgent) is a SINGLETON across thread changes;
+  // its `messages` array survives the per-thread component. Tools we
+  // tried for clearing it had problems:
+  //   - `setMessages([])` then `addMessage(msg)`: produces TWO
+  //     subscriber-notification IIFEs in flight. Some downstream
+  //     consumer (CopilotKit runtime, BFF cache) sees the empty
+  //     intermediate state → ships `contents=[]` to Gemini.
+  //   - direct `a.messages = []`: doesn't notify subscribers, but
+  //     somehow still trips the same race in practice.
+  //
+  // What works: in sendMessage we use ONE atomic
+  // `agent.setMessages([msg])` for the queue-flush path (the synthetic
+  // first message of a brand-new thread). One notification, final
+  // state correct, no race window.
+  //
+  // For ongoing chat-input messages we use addMessage (append on top
+  // of the loaded history). Cross-thread message bleed for non-queued
+  // navigations (e.g. drawer "new chat" button → type directly) is
+  // accepted as a minor UX issue: the BACKEND stores per-thread
+  // correctly, only the visual chat is affected, and the user can
+  // refresh.
+  useEffect(() => {
+    if (!agent || !threadId) return;
+    const a = agent as typeof agent & { abortController?: AbortController };
+    a.threadId = threadId as string;
+
+    if (isNewThread) {
+      setConnecting(false);
+      return;
+    }
+
+    let detached = false;
+    setConnecting(true);
+    const ctl = new AbortController();
+    if ("abortController" in a) {
+      a.abortController = ctl;
+    }
+    // Diagnostic logging for the intermittent "history doesn't load on
+    // refresh" bug. Remove once we've nailed the cause.
+    const t0 = performance.now();
+    console.debug("[gpilot:connect] start", {
+      threadId,
+      hadMessages: (a as typeof a & { messages?: unknown[] }).messages?.length ?? 0,
+      hadStateMessages:
+        ((a as typeof a & { state?: { messages?: unknown[] } }).state?.messages
+          ?.length ?? 0),
+    });
+    copilotkit
+      .connectAgent({ agent })
+      .catch((err: unknown) => {
+        if (detached) return;
+        console.error("connectAgent failed", err);
+        if (isUnusableThreadError(err)) router.replace("/");
+      })
+      .finally(() => {
+        if (!detached) setConnecting(false);
+        console.debug("[gpilot:connect] settled", {
+          threadId,
+          ms: Math.round(performance.now() - t0),
+          detached,
+          messages:
+            (a as typeof a & { messages?: unknown[] }).messages?.length ?? 0,
+          stateMessages:
+            ((a as typeof a & { state?: { messages?: unknown[] } }).state
+              ?.messages?.length ?? 0),
+        });
+      });
+    return () => {
+      detached = true;
+      try {
+        ctl.abort();
+      } catch {
+        // ignore
+      }
+    };
+  }, [agent, threadId, copilotkit, isNewThread, router]);
+
+  const sendMessage = useCallback(
+    async (text: string, opts?: { replaceHistory?: boolean }) => {
+      if (!agent || !text.trim() || busy) return;
+      setBusy(true);
+      try {
+        const id =
+          typeof crypto !== "undefined" && "randomUUID" in crypto
+            ? crypto.randomUUID()
+            : `msg-${Date.now()}`;
+        const userMsg = { id, role: "user" as const, content: text };
+        if (opts?.replaceHistory) {
+          // Queue-flush path: thread is brand-new, agent.messages may
+          // still hold the previous thread's history (singleton). Wipe
+          // and seed the array atomically — one subscriber notification
+          // with the FINAL [user_msg] state, no clear-then-add race.
+          (agent as typeof agent & { setMessages: (m: unknown[]) => void })
+            .setMessages([userMsg]);
+        } else {
+          agent.addMessage(userMsg);
+        }
+        await copilotkit.runAgent({ agent });
+      } catch (err) {
+        console.error("runAgent failed", err);
+        if (isUnusableThreadError(err)) router.replace("/");
+      } finally {
+        setBusy(false);
+      }
+    },
+    [agent, busy, copilotkit, router],
+  );
+
+  // Flush any queued message from the entry-page mount. Gated on
+  // `!connecting` so we never race connectAgent's STATE_SNAPSHOT.
+  useEffect(() => {
+    if (flushedQueueRef.current) return;
+    if (!agent || connecting) return;
+    let queued: string | null = null;
+    try {
+      queued = sessionStorage.getItem(QUEUED_KEY);
+      if (queued) sessionStorage.removeItem(QUEUED_KEY);
+    } catch {
+      // ignore
+    }
+    if (queued) {
+      flushedQueueRef.current = true;
+      // replaceHistory=true: this is the very first message of a
+      // brand-new thread, so seed agent.messages atomically rather
+      // than appending onto whatever the singleton was carrying from
+      // a prior thread.
+      void sendMessage(queued, { replaceHistory: true });
+    }
+  }, [agent, connecting, sendMessage]);
+
+  return (
+    <WidgetActionsProvider value={{ dispatch: sendMessage, busy }}>
+      <div className="flex">
+        <ChatColumn
+          busy={busy}
+          connecting={connecting}
+          onSubmit={sendMessage}
+          canvasOpen={canvasOpen}
+          onToggleCanvas={onToggleCanvas}
+        />
+        <CanvasPane
+          open={canvasOpen}
+          width={canvasWidth}
+          onResize={onCanvasResize}
+          onContentArrived={onCanvasOpen}
+        />
+      </div>
+    </WidgetActionsProvider>
   );
 }
 
@@ -208,6 +330,20 @@ function ChatColumn({
 const LS_DRAWER = "gpilot.drawerOpen";
 const LS_CANVAS = "gpilot.canvasOpen";
 const LS_CANVAS_W = "gpilot.canvasWidth";
+
+/**
+ * Standard UUID shape (v1-v5, including v4 from crypto.randomUUID).
+ * 8-4-4-4-12 hex with the canonical hyphen layout.
+ *
+ * We validate the URL-supplied threadId against this BEFORE mounting
+ * the chat surface because Intelligence Platform's connect endpoint
+ * rejects malformed ids with a 400 VALIDATION_ERROR — but the error
+ * is logged inside CopilotKit without rejecting the connect promise,
+ * so our server-side catch never fires. Front-side validation is the
+ * only reliable bouncer.
+ */
+const UUID_RE =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 function readBool(key: string, fallback: boolean): boolean {
   if (typeof window === "undefined") return fallback;
@@ -276,7 +412,19 @@ function ChatLayout() {
     return () => window.removeEventListener("keydown", onKeyDown);
   }, []);
 
-  if (!threadId) return null;
+  // Bail out on missing or malformed threadIds before mounting the
+  // chat surface. CopilotKit's connect endpoint logs the resulting
+  // VALIDATION_ERROR but doesn't reject the promise we awaited, so
+  // server-side catches don't fire — front-side validation is the
+  // only reliable bouncer.
+  useEffect(() => {
+    if (!threadId) return;
+    if (!UUID_RE.test(threadId)) {
+      router.replace("/");
+    }
+  }, [threadId, router]);
+
+  if (!threadId || !UUID_RE.test(threadId)) return null;
 
   return (
     <div className={drawerStyles.layout}>
@@ -292,19 +440,18 @@ function ChatLayout() {
       />
       <div className={drawerStyles.mainPanel}>
         <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
-          <div className="flex">
-            <ChatColumn
-              threadId={threadId}
-              canvasOpen={canvasOpen}
-              onToggleCanvas={() => setCanvasOpen((v) => !v)}
-            />
-            <CanvasPane
-              open={canvasOpen}
-              width={canvasWidth}
-              onResize={setCanvasWidth}
-              onContentArrived={() => setCanvasOpen(true)}
-            />
-          </div>
+          {/* Keying ChatLayoutInner forces fresh useState/useRef per
+              thread — kills the "messages bleed across threads" bug
+              and resets the queue-flush guard cleanly. */}
+          <ChatLayoutInner
+            key={threadId}
+            threadId={threadId}
+            canvasOpen={canvasOpen}
+            onToggleCanvas={() => setCanvasOpen((v) => !v)}
+            canvasWidth={canvasWidth}
+            onCanvasResize={setCanvasWidth}
+            onCanvasOpen={() => setCanvasOpen(true)}
+          />
         </CopilotChatConfigurationProvider>
       </div>
     </div>

@@ -35,6 +35,8 @@
   --chart-3: #3D92E8;
   --chart-4: #FFAC4D;
   --chart-5: #FFF388;
+  /* Toolbar — chat header, threads drawer chrome row, canvas tab bar */
+  --app-chrome-row-height: 40px;
   --radius: 0.75rem;
   --sidebar: #F7F7F7;
   --sidebar-foreground: #0A0A0B;
@@ -351,7 +353,6 @@ html {
   animation: gpilot-thinking-fade 360ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
-/* Respect prefers-reduced-motion. */
 @media (prefers-reduced-motion: reduce) {
   .gpilot-fade-in,
   .gpilot-pill-in,

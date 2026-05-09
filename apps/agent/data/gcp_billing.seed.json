@@ -1,27 +1,8 @@
 {
   "_meta": {
-    "description": "Seeded BigQuery billing-export rows for offline gpilot development. Mirrors the schema of `gcp_billing_export_v1` (the standard daily detailed export). Two months of 8 services, with a deliberate cost spike on Cloud Run mid-March so demos have a story to tell.",
+    "description": "Empty by design. Billing data comes from BigQuery via the live MCP path; if the export hasn't populated yet the chart simply renders empty. We don't want fake numbers on a real demo.",
     "schema": ["month", "service", "cost_usd"],
-    "source_label": "seed",
     "as_of": "2026-05-09"
   },
-  "rows": [
-    { "month": "2026-04", "service": "Cloud Run", "cost_usd": 18.42 },
-    { "month": "2026-04", "service": "BigQuery", "cost_usd": 7.13 },
-    { "month": "2026-04", "service": "Cloud Storage", "cost_usd": 3.84 },
-    { "month": "2026-04", "service": "Artifact Registry", "cost_usd": 2.10 },
-    { "month": "2026-04", "service": "Cloud Build", "cost_usd": 1.95 },
-    { "month": "2026-04", "service": "Networking", "cost_usd": 1.46 },
-    { "month": "2026-04", "service": "Logging", "cost_usd": 0.88 },
-    { "month": "2026-04", "service": "Secret Manager", "cost_usd": 0.21 },
-
-    { "month": "2026-05", "service": "Cloud Run", "cost_usd": 47.61 },
-    { "month": "2026-05", "service": "BigQuery", "cost_usd": 9.05 },
-    { "month": "2026-05", "service": "Cloud Storage", "cost_usd": 4.12 },
-    { "month": "2026-05", "service": "Artifact Registry", "cost_usd": 2.74 },
-    { "month": "2026-05", "service": "Cloud Build", "cost_usd": 3.66 },
-    { "month": "2026-05", "service": "Networking", "cost_usd": 2.01 },
-    { "month": "2026-05", "service": "Logging", "cost_usd": 0.92 },
-    { "month": "2026-05", "service": "Secret Manager", "cost_usd": 0.23 }
-  ]
+  "rows": []
 }

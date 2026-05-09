@@ -151,6 +151,108 @@ def fetch_run_services(project_id: str) -> List[Dict[str, Any]]:
     return out
 
 
+# --- Compute Engine VMs (gcloud MCP) ------------------------------------
+
+def fetch_compute_instances(project_id: str) -> List[Dict[str, Any]]:
+    """List Compute Engine VM instances across all zones.
+
+    Uses the aggregated `gcloud compute instances list` (all zones at
+    once). Returns one GCPResource per VM. If the Compute API isn't
+    enabled the gcloud MCP raises — we let it bubble (caller swallows).
+    """
+    raw = gcp_mcp.gcloud_run(
+        f"compute instances list --format=json --project={project_id}"
+    )
+    instances = raw if isinstance(raw, list) else []
+
+    out: List[Dict[str, Any]] = []
+    for vm in instances:
+        name = vm.get("name") or ""
+        if not name:
+            continue
+        # zone is a full URL like ".../zones/us-central1-a" — keep tail
+        zone_url = vm.get("zone") or ""
+        zone = zone_url.rsplit("/", 1)[-1] if zone_url else "unknown"
+        # machineType is also a full URL, e.g. ".../machineTypes/e2-medium"
+        mtype_url = vm.get("machineType") or ""
+        machine_type = mtype_url.rsplit("/", 1)[-1] if mtype_url else None
+        status = (vm.get("status") or "UNKNOWN").lower()
+
+        # External IP (if any): networkInterfaces[0].accessConfigs[0].natIP
+        external_ip: Optional[str] = None
+        for nic in vm.get("networkInterfaces", []) or []:
+            for ac in nic.get("accessConfigs", []) or []:
+                if ac.get("natIP"):
+                    external_ip = ac["natIP"]
+                    break
+            if external_ip:
+                break
+
+        out.append(
+            {
+                "id": f"vm:{zone}/{name}",
+                "type": "service",  # reuse 'service' card shape — VM is a service
+                "name": name,
+                "region": zone,
+                "status": status,  # 'running', 'terminated', 'stopping', etc.
+                "cost_usd_mtd": 0.0,
+                "metadata": {
+                    "platform": "Compute Engine",
+                    "machine_type": machine_type,
+                    "external_ip": external_ip,
+                    "url": external_ip and f"http://{external_ip}",
+                },
+                "last_updated": vm.get("creationTimestamp"),
+            }
+        )
+    return out
+
+
+# --- GCS buckets (gcloud MCP) -------------------------------------------
+
+def fetch_gcs_buckets(project_id: str) -> List[Dict[str, Any]]:
+    """List GCS buckets in the project as GCPResource[]."""
+    raw = gcp_mcp.gcloud_run(
+        f"storage buckets list --format=json --project={project_id}"
+    )
+    buckets = raw if isinstance(raw, list) else []
+
+    out: List[Dict[str, Any]] = []
+    for b in buckets:
+        # `gcloud storage buckets list --format=json` emits keys like
+        # 'storage_url' (gs://...), 'name', 'location', 'storage_class',
+        # 'time_created'. Some shells emit camelCase; cover both.
+        name = b.get("name") or (b.get("storage_url") or "").replace("gs://", "").rstrip("/")
+        if not name:
+            continue
+        location = b.get("location") or b.get("locationConstraint") or "unknown"
+        storage_class = (
+            b.get("storage_class")
+            or b.get("storageClass")
+            or b.get("default_storage_class")
+            or "STANDARD"
+        )
+        created = b.get("time_created") or b.get("timeCreated")
+
+        out.append(
+            {
+                "id": f"bucket:{name}",
+                "type": "service",
+                "name": name,
+                "region": str(location).lower(),
+                "status": "active",
+                "cost_usd_mtd": 0.0,
+                "metadata": {
+                    "platform": "Cloud Storage",
+                    "storage_class": storage_class,
+                    "url": f"https://console.cloud.google.com/storage/browser/{name}",
+                },
+                "last_updated": created,
+            }
+        )
+    return out
+
+
 # --- Project + utility wrappers -----------------------------------------
 
 def fetch_project_info(project_id: str) -> Optional[Dict[str, Any]]:

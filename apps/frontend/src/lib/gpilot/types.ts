@@ -44,12 +44,66 @@ export interface SyncMeta {
   syncedAt?: string;
 }
 
+// --- Daytona sandbox shapes ---------------------------------------------
+
+export interface SandboxMeta {
+  id?: string;
+  status?: "running" | "stopped";
+  workspace?: string;
+  image?: string;
+  started_at?: string;
+}
+
+export interface TerminalEntry {
+  id: string;
+  command: string;
+  cwd?: string;
+  stdout?: string;
+  stderr?: string;
+  exit_code?: number;
+  duration_ms?: number;
+  ts?: string;
+}
+
+export interface SandboxFile {
+  path: string;
+  bytes?: number;
+  ts?: string;
+  /** "write" | "read" | "clone" — currently only "write" is tracked. */
+  kind?: string;
+}
+
+export interface SandboxPreview {
+  port: number;
+  url: string;
+  started_at?: string;
+}
+
+// --- Agent-generated UI -------------------------------------------------
+//
+// Mirror of the WIDGET SPEC the agent is taught in the system prompt.
+// We accept Record<string, unknown> intentionally — every widget renderer
+// validates per-render so a malformed widget shows a placeholder instead
+// of crashing the canvas.
+
+export type WidgetSpec = {
+  kind: string;
+  [k: string]: unknown;
+};
+
+// ------------------------------------------------------------------------
+
 export interface AgentState {
   resources: GCPResource[];
   billing_periods: BillingPeriod[];
   selected_resource_id: string | null;
   header?: Header;
   sync?: SyncMeta;
+  sandbox?: SandboxMeta;
+  terminal_log: TerminalEntry[];
+  sandbox_files: SandboxFile[];
+  sandbox_preview: SandboxPreview | null;
+  dynamic_widgets: WidgetSpec[];
 }
 
 /**
@@ -62,6 +116,11 @@ export const initialAgentState: AgentState = {
   selected_resource_id: null,
   header: { title: "gpilot", subtitle: "Agentic interface for Google Cloud" },
   sync: {},
+  sandbox: undefined,
+  terminal_log: [],
+  sandbox_files: [],
+  sandbox_preview: null,
+  dynamic_widgets: [],
 };
 
 export function mergeAgentState(raw: unknown): AgentState {
@@ -77,5 +136,10 @@ export function mergeAgentState(raw: unknown): AgentState {
     sync: { ...initialAgentState.sync, ...(partial.sync ?? {}) },
     selected_resource_id:
       partial.selected_resource_id ?? initialAgentState.selected_resource_id,
+    sandbox: partial.sandbox ?? initialAgentState.sandbox,
+    terminal_log: partial.terminal_log ?? initialAgentState.terminal_log,
+    sandbox_files: partial.sandbox_files ?? initialAgentState.sandbox_files,
+    sandbox_preview: partial.sandbox_preview ?? initialAgentState.sandbox_preview,
+    dynamic_widgets: partial.dynamic_widgets ?? initialAgentState.dynamic_widgets,
   };
 }

@@ -1,72 +1,7 @@
 {
   "_meta": {
-    "description": "Seeded Cloud Run / BigQuery / Storage resources for offline gpilot development. Numbers chosen to be plausible for a hobby project; the Cloud Run service `leaderboard-api` reflects the demo target the agent will eventually deploy.",
+    "description": "Empty by design. The kit no longer falls back to seeded resources — it shows only what's actually in the user's GCP project (project info + live Cloud Run services). If you re-add entries here, also re-enable the seed-merge in gcp_store.GCPStore.resources_with_source().",
     "as_of": "2026-05-09"
   },
-  "resources": [
-    {
-      "id": "service:us-central1/leaderboard-api",
-      "type": "service",
-      "name": "leaderboard-api",
-      "region": "us-central1",
-      "status": "live",
-      "cost_usd_mtd": 31.20,
-      "metadata": {
-        "platform": "Cloud Run",
-        "url": "https://leaderboard-api-abcd-uc.a.run.app",
-        "revision": "leaderboard-api-00007-xkz",
-        "traffic": [{ "revision": "00007-xkz", "percent": 100 }],
-        "min_instances": 0,
-        "max_instances": 2,
-        "image": "us-central1-docker.pkg.dev/gpilot-demo/apps/leaderboard-api:0.7.1"
-      },
-      "last_updated": "2026-05-08T22:04:11Z"
-    },
-    {
-      "id": "service:us-central1/billing-summarizer",
-      "type": "service",
-      "name": "billing-summarizer",
-      "region": "us-central1",
-      "status": "live",
-      "cost_usd_mtd": 4.71,
-      "metadata": {
-        "platform": "Cloud Run",
-        "url": "https://billing-summarizer-abcd-uc.a.run.app",
-        "revision": "billing-summarizer-00003-q2p",
-        "traffic": [{ "revision": "00003-q2p", "percent": 100 }],
-        "min_instances": 0,
-        "max_instances": 1,
-        "image": "us-central1-docker.pkg.dev/gpilot-demo/apps/billing-summarizer:0.3.0"
-      },
-      "last_updated": "2026-04-30T09:12:00Z"
-    },
-    {
-      "id": "dataset:billing_export",
-      "type": "dataset",
-      "name": "billing_export",
-      "region": "us",
-      "status": "active",
-      "cost_usd_mtd": 9.05,
-      "metadata": {
-        "platform": "BigQuery",
-        "tables": ["gcp_billing_export_v1_DEMO_2026"],
-        "row_count": 19842
-      },
-      "last_updated": "2026-05-09T03:00:00Z"
-    },
-    {
-      "id": "bucket:gpilot-demo-assets",
-      "type": "bucket",
-      "name": "gpilot-demo-assets",
-      "region": "us-central1",
-      "status": "active",
-      "cost_usd_mtd": 4.12,
-      "metadata": {
-        "platform": "Cloud Storage",
-        "object_count": 312,
-        "size_gb": 18.4
-      },
-      "last_updated": "2026-05-09T01:30:00Z"
-    }
-  ]
+  "resources": []
 }

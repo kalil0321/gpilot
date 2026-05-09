@@ -12,6 +12,8 @@ import {
   type KeyboardEvent,
 } from "react";
 
+import { ModelSelector } from "@/components/chat/ModelSelector";
+
 interface ChatInputProps {
   /** Called with the typed message when the user submits. */
   onSubmit: (value: string) => void;
@@ -33,7 +35,7 @@ export interface ChatInputHandle {
 
 /**
  * Two-row chat input — Cursor-style card with a textarea on top and a
- * thin toolbar (attach placeholder + send) on the bottom. 16px radius
+ * thin toolbar (attach + model picker + send) on the bottom. 16px radius
  * card, hairline border, no pill-rounding, no shadow.
  *
  * Keyboard:
@@ -127,8 +129,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
     const attachIconSize = isLg ? 18 : 14;
 
     const pillCls = isLg
-      ? "rounded-full border px-4 py-2.5 text-[14px] transition-colors hover:bg-muted hover:border-foreground disabled:opacity-50"
-      : "rounded-full border px-3 py-1.5 text-[12px] transition-colors hover:bg-muted hover:border-foreground disabled:opacity-50";
+      ? "cursor-pointer rounded-full border px-4 py-2.5 text-[14px] transition-colors hover:bg-muted hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50"
+      : "cursor-pointer rounded-full border px-3 py-1.5 text-[12px] transition-colors hover:bg-muted hover:border-foreground disabled:cursor-not-allowed disabled:opacity-50";
 
     return (
       <div className="w-full">
@@ -164,6 +166,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             >
               <Plus size={attachIconSize} strokeWidth={2} />
             </button>
+
+            <ModelSelector variant={isLg ? "lg" : "default"} disabled={busy} />
 
             <button
               type="submit"

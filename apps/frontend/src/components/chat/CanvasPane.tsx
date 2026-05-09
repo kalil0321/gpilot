@@ -1,18 +1,19 @@
 "use client";
 
-import { Maximize2, Minus, Plus } from "lucide-react";
+import { Maximize2, Minus, Plus, Server, Sparkles } from "lucide-react";
 import {
   useCallback,
   useEffect,
   useMemo,
   useRef,
   useState,
+  type MouseEvent as ReactMouseEvent,
   type WheelEvent as ReactWheelEvent,
 } from "react";
 import { useAgent } from "@copilotkit/react-core/v2";
 
-import { BillingChartCard } from "@/components/gpilot/BillingChartCard";
-import { ResourceCard } from "@/components/gpilot/ResourceCard";
+import { SandboxTab } from "@/components/gpilot/SandboxTab";
+import { DynamicWidget } from "@/components/widgets/DynamicWidget";
 import { mergeAgentState } from "@/lib/gpilot/types";
 
 const MIN_WIDTH = 320;
@@ -23,6 +24,10 @@ const MAX_ZOOM = 2.5;
 const ZOOM_STEP = 0.15;
 const DOT_BASE = 16;
 
+const LS_TAB = "gpilot.canvasTab";
+
+type CanvasTab = "canvas" | "sandbox";
+
 interface CanvasPaneProps {
   open: boolean;
   width: number;
@@ -31,18 +36,21 @@ interface CanvasPaneProps {
 }
 
 /**
- * Right-side canvas pane — now a real pannable + zoomable surface.
+ * Right-side canvas pane with two surfaces:
  *
- *   trackpad two-finger swipe / mouse-wheel  → pan
- *   cmd/ctrl + wheel  /  trackpad pinch       → zoom (around cursor)
- *   click + drag on empty background          → pan
- *   [+] [−] [⤢] buttons (top-right)           → zoom controls
+ *   [Canvas]    agent-rendered widgets on a pannable + zoomable plane
+ *               (dot grid, drag empty space to pan, scroll to pan,
+ *               cmd/ctrl+wheel to zoom, corner controls).
  *
- * Dot-grid background scales with the zoom factor and offsets with
- * the pan, so it reads as an infinite plane (React Flow / Figma feel).
+ *   [Sandbox]   terminal log + file list + live preview iframe of the
+ *               Daytona sandbox. Kept as its own tab because the iframe
+ *               and live-streaming console feel weird when scaled or
+ *               composed alongside arbitrary widgets.
  *
- * Cards still render in their own normal flex column inside the
- * transformed surface — zooming the surface scales the cards too.
+ * Auto-tab-switch heuristic: tools tag their canvas update with
+ * `sync.source` — "ui" for render_ui, "daytona" for sandbox tools.
+ * When syncedAt changes, we read source and flip to the matching tab
+ * so the user always sees what just changed.
  */
 export function CanvasPane({
   open,
@@ -52,15 +60,45 @@ export function CanvasPane({
 }: CanvasPaneProps) {
   const { agent } = useAgent();
   const state = useMemo(() => mergeAgentState(agent?.state), [agent?.state]);
-  const hasContent =
-    state.billing_periods.length > 0 || state.resources.length > 0;
 
-  const prevHadContentRef = useRef<boolean | null>(null);
+  const hasRender = state.dynamic_widgets.length > 0;
+  const hasSandbox =
+    Boolean(state.sandbox?.id) ||
+    state.terminal_log.length > 0 ||
+    state.sandbox_files.length > 0 ||
+    state.sandbox_preview != null;
+  const hasContent = hasRender || hasSandbox;
+
+  // ----- tabs --------------------------------------------------------------
+  const [activeTab, setActiveTab] = useState<CanvasTab>(() => {
+    if (typeof window === "undefined") return "canvas";
+    const raw = window.localStorage.getItem(LS_TAB);
+    return raw === "sandbox" ? "sandbox" : "canvas";
+  });
   useEffect(() => {
-    const prev = prevHadContentRef.current;
-    if (prev === false && hasContent) onContentArrived?.();
-    prevHadContentRef.current = hasContent;
-  }, [hasContent, onContentArrived]);
+    try {
+      window.localStorage.setItem(LS_TAB, activeTab);
+    } catch {
+      // ignore (private mode etc.)
+    }
+  }, [activeTab]);
+
+  // Auto-open + auto-switch on a new tool-driven sync. We watch
+  // `sync.syncedAt` because it changes on every successful canvas
+  // tool call (and rehydrated threads keep the persisted value through
+  // the first render unchanged, so we don't accidentally reopen on load).
+  const prevSyncedAtRef = useRef<string | undefined>(state.sync?.syncedAt);
+  useEffect(() => {
+    const prev = prevSyncedAtRef.current;
+    const cur = state.sync?.syncedAt;
+    if (cur && cur !== prev) {
+      const src = state.sync?.source ?? "";
+      if (src === "daytona") setActiveTab("sandbox");
+      else setActiveTab("canvas");
+      if (hasContent) onContentArrived?.();
+    }
+    prevSyncedAtRef.current = cur;
+  }, [state.sync?.syncedAt, state.sync?.source, hasContent, onContentArrived]);
 
   // ----- resize handle -----------------------------------------------------
   const [dragging, setDragging] = useState(false);
@@ -89,22 +127,25 @@ export function CanvasPane({
     };
   }, [dragging, onResize]);
 
-  // ----- pan + zoom --------------------------------------------------------
+  // ----- pan + zoom (canvas tab only; state kept when switching tabs) -----
   const surfaceRef = useRef<HTMLDivElement>(null);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
+  const panDragRef = useRef<{
+    startX: number;
+    startY: number;
+    basePanX: number;
+    basePanY: number;
+  } | null>(null);
+  const [surfacePanDragging, setSurfacePanDragging] = useState(false);
 
-  const clampZoom = (z: number) => Math.max(MIN_ZOOM, Math.min(MAX_ZOOM, z));
+  const clampZoom = useCallback((z: number) => Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, z)), []);
 
-  // Zoom around a screen-space point (cursor or pane centre) so the
-  // pixel under the cursor stays put during the zoom.
   const zoomAround = useCallback(
     (factor: number, screenX: number, screenY: number) => {
       setZoom((prev) => {
         const next = clampZoom(prev * factor);
         if (next === prev) return prev;
-        // World point under cursor: (screen - pan) / zoom
-        // After zoom: new pan = screen - worldPoint * newZoom
         setPan((p) => ({
           x: screenX - ((screenX - p.x) / prev) * next,
           y: screenY - ((screenY - p.y) / prev) * next,
@@ -112,39 +153,41 @@ export function CanvasPane({
         return next;
       });
     },
-    [],
+    [clampZoom],
   );
 
-  const onWheel = (e: ReactWheelEvent<HTMLDivElement>) => {
-    const rect = surfaceRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    if (e.ctrlKey || e.metaKey) {
-      e.preventDefault();
-      const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
-      zoomAround(factor, e.clientX - rect.left, e.clientY - rect.top);
-    } else {
-      e.preventDefault();
-      setPan((p) => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
-    }
-  };
+  const onWheelCanvas = useCallback(
+    (e: ReactWheelEvent<HTMLDivElement>) => {
+      const rect = surfaceRef.current?.getBoundingClientRect();
+      if (!rect) return;
+      if (e.ctrlKey || e.metaKey) {
+        e.preventDefault();
+        const factor = e.deltaY < 0 ? 1.08 : 1 / 1.08;
+        zoomAround(factor, e.clientX - rect.left, e.clientY - rect.top);
+      } else {
+        e.preventDefault();
+        setPan((p) => ({ x: p.x - e.deltaX, y: p.y - e.deltaY }));
+      }
+    },
+    [zoomAround],
+  );
 
-  // Click + drag on the background to pan. Cards still scroll / interact
-  // normally because the listener checks event.target against the
-  // surface root — drags that start INSIDE a card (Card component or
-  // its children) are ignored here.
-  const panDragRef = useRef<{ startX: number; startY: number; basePanX: number; basePanY: number } | null>(null);
-  const onMouseDownPan = (e: React.MouseEvent<HTMLDivElement>) => {
-    if (e.button !== 0) return;
-    if (e.target !== e.currentTarget) return;
-    panDragRef.current = {
-      startX: e.clientX,
-      startY: e.clientY,
-      basePanX: pan.x,
-      basePanY: pan.y,
-    };
-    document.body.style.cursor = "grabbing";
-    document.body.style.userSelect = "none";
-  };
+  const onMouseDownPan = useCallback(
+    (e: ReactMouseEvent<HTMLDivElement>) => {
+      if (e.button !== 0) return;
+      if (e.target !== e.currentTarget) return;
+      panDragRef.current = {
+        startX: e.clientX,
+        startY: e.clientY,
+        basePanX: pan.x,
+        basePanY: pan.y,
+      };
+      setSurfacePanDragging(true);
+      document.body.style.cursor = "grabbing";
+      document.body.style.userSelect = "none";
+    },
+    [pan.x, pan.y],
+  );
 
   useEffect(() => {
     const onMove = (e: MouseEvent) => {
@@ -158,6 +201,7 @@ export function CanvasPane({
     const onUp = () => {
       if (!panDragRef.current) return;
       panDragRef.current = null;
+      setSurfacePanDragging(false);
       document.body.style.cursor = "";
       document.body.style.userSelect = "";
     };
@@ -169,10 +213,20 @@ export function CanvasPane({
     };
   }, []);
 
-  const resetView = () => {
+  const resetCanvasView = useCallback(() => {
     setZoom(1);
     setPan({ x: 0, y: 0 });
-  };
+  }, []);
+
+  const zoomFromViewportCentre = useCallback(
+    (factor: number) => {
+      const el = surfaceRef.current;
+      const vw = el?.clientWidth ?? width;
+      const vh = el?.clientHeight ?? 480;
+      zoomAround(factor, vw / 2, vh / 2);
+    },
+    [zoomAround, width],
+  );
 
   return (
     <aside
@@ -203,104 +257,248 @@ export function CanvasPane({
         />
       ) : null}
 
-      <div
-        className="flex h-full flex-col"
-        style={{ width, minWidth: width }}
-      >
-        {/* Pannable / zoomable surface. Dot-grid lives on this outer
-            element with a background-position/-size driven by pan + zoom
-            so it feels infinite. The transformed inner div carries the
-            actual content. */}
-        <div
-          ref={surfaceRef}
-          className="relative flex-1 overflow-hidden"
-          onWheel={onWheel}
-          onMouseDown={onMouseDownPan}
-          style={{
-            cursor: panDragRef.current ? "grabbing" : "grab",
-            backgroundImage:
-              "radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0)",
-            backgroundSize: `${DOT_BASE * zoom}px ${DOT_BASE * zoom}px`,
-            backgroundPosition: `${pan.x}px ${pan.y}px`,
-          }}
-        >
-          {/* Zoom controls — fixed top-right of the surface, NOT scaled. */}
-          <div className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-card/90 px-1 py-1 backdrop-blur"
-               style={{ borderColor: "var(--border)" }}>
-            <CtlButton onClick={() => zoomAround(1 - ZOOM_STEP, 0, 0)} aria-label="Zoom out">
-              <Minus size={13} />
-            </CtlButton>
-            <span
-              className="px-1 font-mono text-[10px] tabular-nums"
-              style={{ color: "var(--muted-foreground)" }}
-            >
-              {Math.round(zoom * 100)}%
-            </span>
-            <CtlButton onClick={() => zoomAround(1 + ZOOM_STEP, 0, 0)} aria-label="Zoom in">
-              <Plus size={13} />
-            </CtlButton>
-            <CtlButton onClick={resetView} aria-label="Reset view" title="Reset (1×, centered)">
-              <Maximize2 size={12} />
-            </CtlButton>
-          </div>
+      <div className="flex h-full flex-col" style={{ width, minWidth: width }}>
+        <TabBar
+          activeTab={activeTab}
+          onChange={setActiveTab}
+          renderCount={state.dynamic_widgets.length}
+          terminalCount={state.terminal_log.length}
+          sandboxRunning={Boolean(state.sandbox?.id)}
+          previewLive={state.sandbox_preview != null}
+        />
 
-          {/* Transformed content layer. */}
+        {activeTab === "canvas" ? (
           <div
-            className="absolute left-0 top-0"
+            ref={surfaceRef}
+            className="relative flex-1 select-none overflow-hidden"
+            onWheel={onWheelCanvas}
+            onMouseDown={onMouseDownPan}
             style={{
-              transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-              transformOrigin: "0 0",
-              minWidth: width,
-              padding: "1.25rem 1.25rem 2rem",
+              cursor: surfacePanDragging ? "grabbing" : "grab",
+              backgroundImage:
+                "radial-gradient(circle at 1px 1px, color-mix(in oklab, var(--foreground) 22%, var(--border)) 1px, transparent 0)",
+              backgroundSize: `${DOT_BASE * zoom}px ${DOT_BASE * zoom}px`,
+              backgroundPosition: `${pan.x}px ${pan.y}px`,
             }}
           >
-            {hasContent ? (
-              <div className="flex flex-col gap-5" style={{ width: width - 40 }}>
-                {state.billing_periods.length > 0 ? (
-                  <BillingChartCard periods={state.billing_periods} />
-                ) : null}
-
-                {state.resources.length > 0 ? (
-                  <section>
-                    <h3
-                      className="mb-2 font-mono text-[10px] uppercase tracking-widest"
-                      style={{ color: "var(--muted-foreground)" }}
-                    >
-                      resources · {state.resources.length}
-                    </h3>
-                    <div className="grid gap-3">
-                      {state.resources.map((r) => (
-                        <ResourceCard key={r.id} resource={r} />
-                      ))}
-                    </div>
-                  </section>
-                ) : null}
-              </div>
-            ) : (
-              <div
-                className="flex items-center justify-center"
-                style={{
-                  width: width - 40,
-                  height: 160,
-                  pointerEvents: "none",
-                }}
+            <div
+              className="absolute right-3 top-3 z-20 flex items-center gap-1 rounded-md border bg-card/90 px-1 py-1 backdrop-blur"
+              style={{ borderColor: "var(--border)" }}
+            >
+              <CtlButton
+                aria-label="Zoom out"
+                onClick={() => zoomFromViewportCentre(1 - ZOOM_STEP)}
               >
-                <span
-                  className="font-mono text-[10px] uppercase tracking-widest"
-                  style={{ color: "var(--muted-foreground)" }}
+                <Minus size={13} />
+              </CtlButton>
+              <span
+                className="pointer-events-none select-none px-1 font-mono text-[10px] tabular-nums"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                {Math.round(zoom * 100)}%
+              </span>
+              <CtlButton
+                aria-label="Zoom in"
+                onClick={() => zoomFromViewportCentre(1 + ZOOM_STEP)}
+              >
+                <Plus size={13} />
+              </CtlButton>
+              <CtlButton
+                aria-label="Reset view"
+                title="Reset (1×, centred)"
+                onClick={resetCanvasView}
+              >
+                <Maximize2 size={12} />
+              </CtlButton>
+            </div>
+
+            <div
+              className="pointer-events-none absolute left-0 top-0"
+              style={{
+                transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+                transformOrigin: "0 0",
+                minWidth: width,
+                padding: "1.25rem 1.25rem 2rem",
+              }}
+            >
+              {hasRender ? (
+                <div
+                  className="pointer-events-auto flex flex-col gap-3"
+                  style={{ width: Math.max(200, width - 40) }}
                 >
-                  canvas idle
-                </span>
-              </div>
-            )}
+                  {(state.header?.title || state.header?.subtitle) ? (
+                    <header className="mb-1 flex flex-col gap-0.5">
+                      {state.header?.title ? (
+                        <span
+                          className="text-[16px] font-semibold leading-tight"
+                          style={{ color: "var(--foreground)" }}
+                        >
+                          {state.header.title}
+                        </span>
+                      ) : null}
+                      {state.header?.subtitle ? (
+                        <span
+                          className="text-[11.5px] leading-tight"
+                          style={{ color: "var(--muted-foreground)" }}
+                        >
+                          {state.header.subtitle}
+                        </span>
+                      ) : null}
+                    </header>
+                  ) : null}
+                  {state.dynamic_widgets.map((w, i) => (
+                    <DynamicWidget key={i} widget={w} />
+                  ))}
+                </div>
+              ) : (
+                <div
+                  className="pointer-events-none flex items-center justify-center"
+                  style={{ width: Math.max(200, width - 40), height: 200 }}
+                >
+                  <span
+                    className="font-mono text-[10px] uppercase tracking-widest"
+                    style={{ color: "var(--muted-foreground)" }}
+                  >
+                    ask the agent to render something
+                  </span>
+                </div>
+              )}
+            </div>
           </div>
-        </div>
+        ) : (
+          <div
+            className="flex-1 overflow-y-auto"
+            style={{
+              padding: "1.25rem 1.25rem 2rem",
+              background: "var(--background)",
+            }}
+          >
+            <SandboxTab
+              width={width}
+              sandbox={state.sandbox}
+              terminalLog={state.terminal_log}
+              files={state.sandbox_files}
+              preview={state.sandbox_preview}
+            />
+          </div>
+        )}
       </div>
     </aside>
   );
 }
 
-/** Small zoom-control button. Ghost style, scoped to the canvas pane. */
+// ----- Tab bar -----------------------------------------------------------
+
+function TabBar({
+  activeTab,
+  onChange,
+  renderCount,
+  terminalCount,
+  sandboxRunning,
+  previewLive,
+}: {
+  activeTab: CanvasTab;
+  onChange: (next: CanvasTab) => void;
+  renderCount: number;
+  terminalCount: number;
+  sandboxRunning: boolean;
+  previewLive: boolean;
+}) {
+  return (
+    <div
+      className="flex select-none items-center gap-0 px-3"
+      style={{
+        height: 40,
+        borderBottom: "1px solid var(--border)",
+        background: "var(--background)",
+      }}
+    >
+      <TabButton
+        active={activeTab === "canvas"}
+        onClick={() => onChange("canvas")}
+        icon={<Sparkles size={12} />}
+        label="canvas"
+        badge={renderCount > 0 ? String(renderCount) : undefined}
+      />
+      <TabButton
+        active={activeTab === "sandbox"}
+        onClick={() => onChange("sandbox")}
+        icon={<Server size={12} />}
+        label="sandbox"
+        badge={
+          previewLive
+            ? "live"
+            : terminalCount > 0
+              ? String(terminalCount)
+              : sandboxRunning
+                ? "on"
+                : undefined
+        }
+        accent={previewLive ? "live" : undefined}
+      />
+    </div>
+  );
+}
+
+function TabButton({
+  active,
+  onClick,
+  icon,
+  label,
+  badge,
+  accent,
+}: {
+  active: boolean;
+  onClick: () => void;
+  icon: React.ReactNode;
+  label: string;
+  badge?: string;
+  accent?: "live";
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="group relative inline-flex h-full items-center gap-1.5 px-2.5 font-mono text-[10px] uppercase tracking-widest transition-colors"
+      style={{
+        color: active ? "var(--foreground)" : "var(--muted-foreground)",
+      }}
+    >
+      <span className="flex items-center gap-1.5">
+        {icon}
+        {label}
+      </span>
+      {badge ? (
+        <span
+          className="ml-1 inline-flex items-center rounded-sm px-1 py-px font-mono text-[9px] uppercase tracking-wider"
+          style={{
+            background:
+              accent === "live"
+                ? "color-mix(in oklab, #3ddc84 14%, var(--surface-sunken))"
+                : "var(--surface-sunken)",
+            color:
+              accent === "live"
+                ? "color-mix(in oklab, #3ddc84 80%, var(--foreground))"
+                : "var(--muted-foreground)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          {badge}
+        </span>
+      ) : null}
+      {/* active underline */}
+      <span
+        aria-hidden
+        className="absolute bottom-0 left-2 right-2 h-px transition-opacity"
+        style={{
+          background: "var(--foreground)",
+          opacity: active ? 1 : 0,
+        }}
+      />
+    </button>
+  );
+}
+
 function CtlButton({
   children,
   onClick,

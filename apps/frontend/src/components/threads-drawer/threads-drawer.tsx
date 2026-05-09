@@ -1,16 +1,7 @@
 "use client";
 
-import {
-  Archive,
-  ArchiveRestore,
-  Filter,
-  PanelLeft,
-  Plus,
-  Search,
-  SquarePen,
-  Trash2,
-} from "lucide-react";
-import { useCallback, useEffect, useId, useRef, useState } from "react";
+import { ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useThreads } from "@copilotkit/react-core/v2";
 import { Logo } from "@/components/brand/Logo";
@@ -37,7 +28,54 @@ interface DrawerThread {
 const THREAD_ENTRY_ANIMATION_MS = 420;
 const TITLE_ANIMATION_MS = 360;
 const UNTITLED_THREAD_LABEL = "New thread";
-const RUNTIME_BASE_PATH = "/api/copilotkit";
+const PREVIOUS_THREADS_HEADING = "Previous threads";
+
+/** Mock account — replace with real auth / profile later. */
+const MOCK_USER = {
+  name: "Demo user",
+  email: "you@example.com",
+  initials: "DU",
+} as const;
+
+function MockUserButton({ variant }: { variant: "expanded" | "collapsed" }) {
+  if (variant === "collapsed") {
+    return (
+      <button
+        aria-label={`Account: ${MOCK_USER.name} (mock)`}
+        className={styles.mockUserButtonCollapsed}
+        title={`${MOCK_USER.name} · mock`}
+        type="button"
+      >
+        <span className={styles.mockUserAvatarSmall} aria-hidden>
+          {MOCK_USER.initials}
+        </span>
+      </button>
+    );
+  }
+
+  return (
+    <button
+      aria-label={`Account: ${MOCK_USER.name} (mock)`}
+      className={styles.mockUserButton}
+      title={`${MOCK_USER.name} · mock`}
+      type="button"
+    >
+      <span className={styles.mockUserAvatar} aria-hidden>
+        {MOCK_USER.initials}
+      </span>
+      <span className={styles.mockUserText}>
+        <span className={styles.mockUserName}>{MOCK_USER.name}</span>
+        <span className={styles.mockUserEmail}>{MOCK_USER.email}</span>
+      </span>
+      <ChevronsUpDown
+        aria-hidden
+        className={styles.mockUserCaret}
+        size={14}
+        strokeWidth={2}
+      />
+    </button>
+  );
+}
 
 function formatRelativeTime(isoTimestamp: string): string {
   const timestamp = new Date(isoTimestamp);
@@ -95,11 +133,8 @@ export default function ThreadsDrawer({
   } | null>(null);
   const deleteTriggerRef = useRef<HTMLElement | null>(null);
 
-  const [searchQuery, setSearchQuery] = useState("");
-
   const {
     threads,
-    archiveThread,
     deleteThread,
     error,
     isLoading,
@@ -111,25 +146,6 @@ export default function ThreadsDrawer({
     includeArchived: false,
     limit: 20,
   });
-
-  const restoreThread = useCallback(
-    async (id: string) => {
-      const response = await fetch(
-        `${RUNTIME_BASE_PATH}/threads/${encodeURIComponent(id)}`,
-        {
-          method: "PATCH",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ agentId, archived: false }),
-        },
-      );
-      if (!response.ok) {
-        throw new Error(
-          `Restore failed: ${response.status} ${response.statusText}`,
-        );
-      }
-    },
-    [agentId],
-  );
 
   const hasMountedRef = useRef(false);
   const hasLoadedOnceRef = useRef(false);
@@ -241,19 +257,6 @@ export default function ThreadsDrawer({
     previousNamesRef.current = new Map(threads.map((t) => [t.id, t.name]));
   }, [threads, isLoading]);
 
-  // Client-side search over already-loaded threads. This only filters what
-  // has been paginated in (20 threads per page); older threads are invisible
-  // until the user clicks "Load more". A backend search endpoint would be
-  // needed for full-corpus search — not currently exposed by the CopilotKit
-  // runtime.
-  const trimmedQuery = searchQuery.trim().toLowerCase();
-  const filteredThreads = trimmedQuery
-    ? displayThreads.filter((t) =>
-        (t.name ?? "").toLowerCase().includes(trimmedQuery),
-      )
-    : displayThreads;
-  const isSearching = trimmedQuery.length > 0;
-
   const isInitialLoading = isLoading && !hasLoadedOnceRef.current;
   if (error) {
     console.error("Unable to load threads", error);
@@ -266,28 +269,37 @@ export default function ThreadsDrawer({
         className={cx(styles.drawer, styles.drawerClosed)}
       >
         <div className={styles.collapsedRail}>
-          <div className={styles.collapsedRailTop}>
-            <button
-              aria-label="New chat"
-              title="New chat"
-              className={styles.iconButton}
-              type="button"
-              onClick={() => onThreadChange(undefined)}
+          <div className={styles.collapsedRailLeading}>
+            <div
+              className={cx(
+                styles.drawerChromeRow,
+                styles.drawerChromeRowCollapsedRail,
+              )}
             >
-              <SquarePen size={18} />
-            </button>
-            <button
-              aria-label="Search threads (⌘B)"
-              title="Search (⌘B)"
-              className={styles.iconButton}
-              type="button"
-              onClick={() => setIsOpen(true)}
-            >
-              <Search size={18} />
-            </button>
+              <button
+                aria-label="Open threads drawer (⌘B)"
+                title="Open drawer (⌘B)"
+                className={cx(styles.iconButton, styles.drawerToggleButton)}
+                type="button"
+                onClick={() => setIsOpen(true)}
+              >
+                <PanelLeftOpen size={18} />
+              </button>
+            </div>
+            <div className={styles.collapsedNewChatWrap}>
+              <button
+                aria-label="New chat"
+                title="New chat"
+                className={styles.iconButton}
+                type="button"
+                onClick={() => onThreadChange(undefined)}
+              >
+                <Plus size={18} />
+              </button>
+            </div>
           </div>
           <div className={styles.collapsedRailBottom}>
-            <Logo iconOnly className={styles.collapsedRailLogo} />
+            <MockUserButton variant="collapsed" />
           </div>
         </div>
       </aside>
@@ -311,27 +323,52 @@ export default function ThreadsDrawer({
 
         <div className={styles.drawerSurface}>
           <div className={styles.topBar}>
-            <div className={styles.topBarRow}>
+            <div className={styles.drawerChromeRow}>
+              <button
+                aria-label="gpilot — new chat"
+                className={cx(
+                  styles.drawerBrandButtonOpen,
+                  styles.drawerBrandInChrome,
+                )}
+                title="New chat"
+                type="button"
+                onClick={() => onThreadChange(undefined)}
+              >
+                <Logo mono className={styles.drawerBrandLogoOpen} />
+              </button>
+              <button
+                aria-label="Collapse threads drawer"
+                title="Collapse drawer"
+                className={cx(styles.iconButton, styles.drawerToggleButton)}
+                type="button"
+                onClick={() => setIsOpen(false)}
+              >
+                <PanelLeftClose size={18} />
+              </button>
+            </div>
+            <div className={styles.newChatToolbarRow}>
               <button
                 aria-label="New chat"
                 className={styles.newChatButton}
                 type="button"
                 onClick={() => onThreadChange(undefined)}
               >
-                New
+                <span className={styles.newChatButtonInner}>
+                  <Plus
+                    size={16}
+                    aria-hidden
+                    className={styles.newChatButtonIcon}
+                  />
+                  <span>New chat</span>
+                </span>
               </button>
-              <div className={styles.searchUnderline}>
-                <input
-                  aria-label="Search threads"
-                  autoComplete="off"
-                  className={styles.searchUnderlineInput}
-                  placeholder="Search threads…"
-                  type="search"
-                  value={searchQuery}
-                  onChange={(e) => setSearchQuery(e.target.value)}
-                />
-              </div>
             </div>
+            <p
+              className={styles.threadListSectionLabel}
+              id="threads-drawer-previous-heading"
+            >
+              {PREVIOUS_THREADS_HEADING}
+            </p>
           </div>
 
           <div className={styles.drawerContent}>
@@ -365,29 +402,19 @@ export default function ThreadsDrawer({
                   </div>
                 ))}
               </div>
-            ) : filteredThreads.length === 0 ? (
+            ) : displayThreads.length === 0 ? (
               <div className={styles.emptyState}>
                 <p className={styles.emptyMessage}>
-                  {isSearching
-                    ? `No threads match "${searchQuery.trim()}".`
-                    : "No threads yet. Start a new chat to begin."}
+                  No threads yet. Start a new chat to begin.
                 </p>
-                {isSearching && hasMoreThreads && (
-                  <button
-                    className={styles.loadMoreButton}
-                    disabled={isFetchingMoreThreads}
-                    type="button"
-                    onClick={fetchMoreThreads}
-                  >
-                    {isFetchingMoreThreads
-                      ? "Loading older threads…"
-                      : "Search older threads"}
-                  </button>
-                )}
               </div>
             ) : (
-              <div className={styles.threadList}>
-                {filteredThreads.map((thread) => {
+              <div
+                aria-labelledby="threads-drawer-previous-heading"
+                className={styles.threadList}
+                role="region"
+              >
+                {displayThreads.map((thread) => {
                   const hasTitle = thread.name !== null;
                   const title = thread.name ?? UNTITLED_THREAD_LABEL;
                   const stamp = thread.lastRunAt ?? thread.updatedAt;
@@ -418,11 +445,9 @@ export default function ThreadsDrawer({
                             )}
                           >
                             {title}
-                            {thread.archived && (
-                              <span className={styles.archivedBadge}>
-                                Archived
-                              </span>
-                            )}
+                          </span>
+                          <span className={styles.threadRowSep} aria-hidden>
+                            ·
                           </span>
                           <span
                             className={styles.threadMeta}
@@ -433,41 +458,6 @@ export default function ThreadsDrawer({
                         </span>
                       </button>
                       <div className={styles.threadActions}>
-                        {thread.archived ? (
-                          <button
-                            aria-label={`Restore ${title}`}
-                            className={cx(
-                              styles.iconButton,
-                              styles.threadActionButton,
-                            )}
-                            type="button"
-                            onClick={() => {
-                              restoreThread(thread.id).catch((err: unknown) => {
-                                console.error("Unable to restore thread", err);
-                              });
-                            }}
-                          >
-                            <ArchiveRestore size={14} />
-                          </button>
-                        ) : (
-                          <button
-                            aria-label={`Archive ${title}`}
-                            className={cx(
-                              styles.iconButton,
-                              styles.threadActionButton,
-                            )}
-                            type="button"
-                            onClick={() => {
-                              if (threadId === thread.id)
-                                onThreadChange(undefined);
-                              archiveThread(thread.id).catch((err: unknown) => {
-                                console.error("Unable to archive thread", err);
-                              });
-                            }}
-                          >
-                            <Archive size={14} />
-                          </button>
-                        )}
                         <button
                           aria-label={`Delete ${title}`}
                           className={cx(
@@ -502,7 +492,7 @@ export default function ThreadsDrawer({
           </div>
 
           <div className={styles.drawerFooter}>
-            <Logo className={styles.brandWordmark} />
+            <MockUserButton variant="expanded" />
           </div>
         </div>
       </aside>

@@ -4,10 +4,12 @@ import { Moon, Sun } from "lucide-react";
 import { useEffect, useState } from "react";
 
 import { useTheme } from "@/hooks/use-theme";
+import { cn } from "@/lib/utils";
 
 interface ThemeToggleProps {
   /** Smaller variant, e.g. for embedded toolbars. */
   size?: "default" | "sm";
+  className?: string;
 }
 
 /**
@@ -16,7 +18,7 @@ interface ThemeToggleProps {
  * and toggles via setTheme(...). Stays a pure ghost button — uses
  * --foreground / --muted on hover, no fill, no border.
  */
-export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
+export function ThemeToggle({ size = "default", className }: ThemeToggleProps) {
   const { setTheme } = useTheme();
   const [resolved, setResolved] = useState<"light" | "dark">("light");
 
@@ -42,7 +44,10 @@ export function ThemeToggle({ size = "default" }: ThemeToggleProps) {
       type="button"
       aria-label={isDark ? "Switch to light mode" : "Switch to dark mode"}
       onClick={() => setTheme(isDark ? "light" : "dark")}
-      className={`grid ${box} place-items-center rounded-md transition-colors hover:bg-muted`}
+      className={cn(
+        `grid ${box} place-items-center rounded-md transition-colors hover:bg-muted`,
+        className,
+      )}
       style={{ color: "var(--muted-foreground)" }}
     >
       {isDark ? <Sun size={dim} /> : <Moon size={dim} />}
