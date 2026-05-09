@@ -22,10 +22,18 @@ type AnyMessage = {
   id?: string;
   role?: string;
   content?: string | null;
+  /** AG-UI uses camelCase. Older OpenAI-shaped payloads sometimes still
+   *  emit `tool_calls`; we accept both for safety. */
+  toolCalls?: Array<{
+    id: string;
+    type?: "function";
+    function: { name: string; arguments: string };
+  }>;
   tool_calls?: Array<{
     id: string;
     function: { name: string; arguments?: string };
   }>;
+  toolCallId?: string;
   tool_call_id?: string;
   name?: string;
 };
@@ -44,12 +52,13 @@ export function ChatMessages() {
   }, [messages.length, messages[messages.length - 1]?.content]);
 
   // Build a quick lookup so we can pair each tool message back to its
-  // originating assistant tool_call (for the status display).
+  // originating assistant toolCall (for the status display).
   const toolResultByCallId = useMemo(() => {
     const map = new Map<string, AnyMessage>();
     for (const m of messages) {
-      if (m.role === "tool" && m.tool_call_id) {
-        map.set(m.tool_call_id, m);
+      if (m.role === "tool") {
+        const callId = m.toolCallId ?? m.tool_call_id;
+        if (callId) map.set(callId, m);
       }
     }
     return map;
@@ -88,7 +97,7 @@ export function ChatMessages() {
               <AssistantBubble
                 key={m.id}
                 content={m.content ?? ""}
-                toolCalls={m.tool_calls ?? []}
+                toolCalls={m.toolCalls ?? m.tool_calls ?? []}
                 toolResultByCallId={toolResultByCallId}
               />
             );
@@ -120,7 +129,7 @@ function AssistantBubble({
   toolResultByCallId,
 }: {
   content: string;
-  toolCalls: NonNullable<AnyMessage["tool_calls"]>;
+  toolCalls: NonNullable<AnyMessage["toolCalls"]> | NonNullable<AnyMessage["tool_calls"]>;
   toolResultByCallId: Map<string, AnyMessage>;
 }) {
   const hasContent = content && content.trim().length > 0;

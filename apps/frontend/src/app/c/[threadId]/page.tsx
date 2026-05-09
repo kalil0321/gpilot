@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelLeft } from "lucide-react";
+import { PanelLeft, PanelRight } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -42,9 +42,13 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
 function ChatColumn({
   drawerOpen,
   onOpenDrawer,
+  canvasOpen,
+  onToggleCanvas,
 }: {
   drawerOpen: boolean;
   onOpenDrawer: () => void;
+  canvasOpen: boolean;
+  onToggleCanvas: () => void;
 }) {
   const router = useRouter();
   const { agent } = useAgent();
@@ -117,15 +121,28 @@ function ChatColumn({
             <Logo />
           </button>
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-1.5">
+          <button
+            type="button"
+            onClick={onToggleCanvas}
+            aria-label={canvasOpen ? "Close canvas" : "Open canvas"}
+            className="hidden size-8 place-items-center rounded-md transition-colors hover:bg-muted xl:grid"
+            style={{
+              color: canvasOpen
+                ? "var(--foreground)"
+                : "var(--muted-foreground)",
+            }}
+            title="Canvas"
+          >
+            <PanelRight size={16} />
+          </button>
+          <ThemeToggle />
+        </div>
       </header>
 
       <ChatMessages />
 
-      <div
-        className="border-t px-6 py-4"
-        style={{ borderColor: "var(--border)" }}
-      >
+      <div className="px-6 pt-2 pb-4">
         <div className="mx-auto max-w-3xl">
           <ChatInput onSubmit={sendMessage} busy={busy} autoFocus />
         </div>
@@ -142,6 +159,10 @@ function ChatLayout() {
   // conversation. The user opens it via the menu button in the chat
   // header (or the existing collapsed-strip chevron on the left edge).
   const [drawerOpen, setDrawerOpen] = useState(false);
+  // Canvas open + width — controlled here so the chat header's toggle
+  // and the pane's resize handle stay in sync.
+  const [canvasOpen, setCanvasOpen] = useState(true);
+  const [canvasWidth, setCanvasWidth] = useState(420);
 
   if (!threadId) return null;
 
@@ -163,8 +184,14 @@ function ChatLayout() {
             <ChatColumn
               drawerOpen={drawerOpen}
               onOpenDrawer={() => setDrawerOpen(true)}
+              canvasOpen={canvasOpen}
+              onToggleCanvas={() => setCanvasOpen((v) => !v)}
             />
-            <CanvasPane />
+            <CanvasPane
+              open={canvasOpen}
+              width={canvasWidth}
+              onResize={setCanvasWidth}
+            />
           </div>
         </CopilotChatConfigurationProvider>
       </div>
