@@ -265,6 +265,7 @@ function ChatLayout() {
               open={canvasOpen}
               width={canvasWidth}
               onResize={setCanvasWidth}
+              onContentArrived={() => setCanvasOpen(true)}
             />
           </div>
         </CopilotChatConfigurationProvider>

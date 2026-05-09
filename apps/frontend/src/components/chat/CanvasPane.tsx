@@ -17,6 +17,10 @@ interface CanvasPaneProps {
    *  can update it. */
   width: number;
   onResize: (next: number) => void;
+  /** Fires when state transitions from "no content" → "has content".
+   *  The parent can use this to auto-open the pane when the agent
+   *  paints something while the canvas was closed. */
+  onContentArrived?: () => void;
 }
 
 /**
@@ -27,12 +31,31 @@ interface CanvasPaneProps {
  * A 4px resize handle sits on the LEFT edge of the pane — drag it
  * horizontally to shrink/grow. Width is clamped to [320, 720] px.
  */
-export function CanvasPane({ open, width, onResize }: CanvasPaneProps) {
+export function CanvasPane({
+  open,
+  width,
+  onResize,
+  onContentArrived,
+}: CanvasPaneProps) {
   const { agent } = useAgent();
   const state = useMemo(() => mergeAgentState(agent?.state), [agent?.state]);
 
   const hasContent =
     state.billing_periods.length > 0 || state.resources.length > 0;
+
+  // Detect "empty → populated" transitions so the parent can auto-open
+  // the pane when the agent paints something while the canvas was
+  // closed. Initial value `null` so the first effect-pass after a
+  // hydrated thread (which lands with hasContent already true) does
+  // NOT fire — only genuine post-mount transitions do.
+  const prevHadContentRef = useRef<boolean | null>(null);
+  useEffect(() => {
+    const prev = prevHadContentRef.current;
+    if (prev === false && hasContent) {
+      onContentArrived?.();
+    }
+    prevHadContentRef.current = hasContent;
+  }, [hasContent, onContentArrived]);
 
   // Resize handle — draggable on its left edge
   const [dragging, setDragging] = useState(false);
