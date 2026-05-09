@@ -217,19 +217,25 @@ def gcloud_run(command: str) -> Any:
 
     Returns: parsed JSON when the command emits JSON, else raw stdout.
     Raises NotConfiguredError when gcloud isn't authenticated.
+
+    The official `@google-cloud/gcloud-mcp` tool signature takes
+    `{args: string[]}` (verified against v1.x — passing `command` as
+    a single string yields a Zod 'args required' error). We split on
+    whitespace; non-trivial quoting isn't currently supported.
     """
     if not is_gcloud_authenticated():
         raise NotConfiguredError(
             "gcloud isn't authenticated. Run `gcloud auth application-default "
             "login` and re-try."
         )
+    args = command.strip().split()
     return _extract_payload(
         _run_sync(
             _call_tool_async(
                 _gcloud_config(),
                 "gcloud",
                 "run_gcloud_command",
-                {"command": command},
+                {"args": args},
             )
         )
     )
