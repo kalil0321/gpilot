@@ -137,20 +137,24 @@ function UserBubble({
 }) {
   return (
     <div
+      className="flex justify-end"
       style={{
-        borderTop: isFirst ? undefined : "1px solid var(--border)",
-        marginTop: isFirst ? undefined : "0.5rem",
-        paddingTop: isFirst ? "0.25rem" : "0.75rem",
+        marginTop: isFirst ? "0.25rem" : "1rem",
         paddingBottom: "0.25rem",
-        width: "100%",
       }}
     >
-      <p
-        className="whitespace-pre-wrap text-right text-[15px] leading-relaxed"
-        style={{ color: "var(--foreground)" }}
+      <div
+        className="max-w-[80%] rounded-2xl px-3.5 py-2.5"
+        style={{
+          background: "var(--card)",
+          color: "var(--foreground)",
+          border: "1px solid var(--border)",
+        }}
       >
-        {content}
-      </p>
+        <p className="whitespace-pre-wrap text-[15px] leading-relaxed">
+          {content}
+        </p>
+      </div>
     </div>
   );
 }

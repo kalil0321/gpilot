@@ -80,6 +80,82 @@
   color: var(--muted-foreground);
 }
 
+/* New top bar — combined search + actions in a single pill, replacing
+ * the templatey "Primary nav" + "Threads section header" combo. */
+.topBar {
+  padding: 0.875rem 0.75rem 0.5rem;
+}
+
+.searchPill {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.4rem 0.6rem 0.4rem 0.7rem;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid var(--border);
+  color: var(--muted-foreground);
+  transition: border-color 120ms ease, background-color 120ms ease;
+}
+
+.searchPill:focus-within {
+  border-color: var(--foreground);
+  background: var(--card);
+}
+
+.searchPill > svg {
+  flex: none;
+  color: inherit;
+}
+
+.searchPill .searchInput {
+  flex: 1;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  outline: 0;
+  color: var(--foreground);
+  font-size: 0.85rem;
+  letter-spacing: -0.005em;
+}
+
+.searchPill .searchInput::placeholder {
+  color: var(--muted-foreground);
+  opacity: 0.6;
+}
+
+.searchPillBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.5rem;
+  height: 1.5rem;
+  padding: 0;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted-foreground);
+  cursor: pointer;
+  transition: background-color 120ms ease, color 120ms ease;
+}
+
+.searchPillBtn:hover,
+.searchPillBtn:focus-visible {
+  background: var(--muted);
+  color: var(--foreground);
+}
+
+.searchPillBtnActive {
+  background: var(--foreground);
+  color: var(--background);
+}
+
+.searchPillBtnActive:hover {
+  background: var(--foreground);
+  color: var(--background);
+  opacity: 0.85;
+}
+
 .brandWordmark {
   font-size: 0.95rem;
   font-weight: 600;
@@ -326,11 +402,11 @@
 
 .threadItemSelected,
 .threadItemSelected:hover {
-  background: var(--sidebar-active);
-  /* Verified brand token border/borderActionEnabled at low opacity —
-     a quiet lilac edge that reinforces the active surface without
-     competing with content. */
-  box-shadow: inset 0 0 0 1px var(--sidebar-active-strong);
+  background: var(--muted);
+  /* Vertical accent bar on the left edge — the active thread reads
+   * as "currently anchored here" without painting a heavy fill.
+   * 3px wide, full height, foreground-coloured. */
+  box-shadow: inset 3px 0 0 0 var(--foreground);
 }
 
 .threadItemAnimatingIn {

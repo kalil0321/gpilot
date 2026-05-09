@@ -3,7 +3,6 @@
 import {
   Archive,
   ArchiveRestore,
-  ChevronRight,
   Filter,
   Plus,
   Search,
@@ -269,16 +268,6 @@ export default function ThreadsDrawer({
         <div className={styles.collapsedRail}>
           <div className={styles.collapsedRailTop}>
             <button
-              aria-label="Open threads drawer"
-              title="Open"
-              className={styles.iconButton}
-              type="button"
-              onClick={() => setIsOpen(true)}
-            >
-              <ChevronRight size={18} />
-            </button>
-            <div aria-hidden className={styles.collapsedRailDivider} />
-            <button
               aria-label="New chat"
               title="New chat"
               className={styles.iconButton}
@@ -288,8 +277,8 @@ export default function ThreadsDrawer({
               <SquarePen size={18} />
             </button>
             <button
-              aria-label="Search threads"
-              title="Search threads"
+              aria-label="Search threads (⌘B)"
+              title="Search (⌘B)"
               className={styles.iconButton}
               type="button"
               onClick={() => setIsOpen(true)}
@@ -321,53 +310,35 @@ export default function ThreadsDrawer({
         <div aria-hidden className={styles.ambientGlow} />
 
         <div className={styles.drawerSurface}>
-          <div className={styles.brandRow}>
-            <span className={styles.brandLabel}>your threads</span>
-          </div>
-
-          <nav aria-label="Primary" className={styles.navList}>
-            <button
-              className={styles.navItem}
-              type="button"
-              onClick={() => onThreadChange(undefined)}
-            >
-              <SquarePen aria-hidden size={16} />
-              <span>New chat</span>
-            </button>
-            <div className={cx(styles.navItem, styles.searchRow)}>
-              <Search aria-hidden size={16} />
+          <div className={styles.topBar}>
+            <div className={styles.searchPill}>
+              <Search aria-hidden size={14} />
               <input
                 aria-label="Search threads"
                 className={styles.searchInput}
-                placeholder="Search threads"
+                placeholder="Search…"
                 type="search"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
-            </div>
-          </nav>
-
-          <div className={styles.sectionHeader}>
-            <span className={styles.sectionLabel}>Threads</span>
-            <div className={styles.sectionActions}>
               <button
                 aria-label={
-                  showArchived ? "Hide archived threads" : "Show archived threads"
+                  showArchived ? "Hide archived" : "Show archived"
                 }
                 aria-pressed={showArchived}
                 className={cx(
-                  styles.iconButton,
-                  styles.sectionActionButton,
-                  showArchived && styles.iconButtonActive,
+                  styles.searchPillBtn,
+                  showArchived && styles.searchPillBtnActive,
                 )}
                 type="button"
                 onClick={() => setShowArchived((v) => !v)}
               >
-                <Filter size={14} />
+                <Filter size={13} />
               </button>
               <button
                 aria-label="New chat"
-                className={cx(styles.iconButton, styles.sectionActionButton)}
+                title="New chat"
+                className={styles.searchPillBtn}
                 type="button"
                 onClick={() => onThreadChange(undefined)}
               >
