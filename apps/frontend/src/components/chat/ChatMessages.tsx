@@ -70,49 +70,65 @@ export function ChatMessages() {
       className="flex-1 overflow-y-auto px-6 py-6"
       style={{ scrollBehavior: "smooth" }}
     >
-      <div className="mx-auto flex max-w-3xl flex-col gap-1">
-        {messages.map((m) => {
-          // Skip system / developer / reasoning / activity for now.
-          if (
-            m.role === "system" ||
-            m.role === "developer" ||
-            m.role === "reasoning" ||
-            m.role === "activity"
-          ) {
+      <div className="mx-auto flex max-w-3xl flex-col">
+        {(() => {
+          let userIndex = 0;
+          return messages.map((m) => {
+            if (
+              m.role === "system" ||
+              m.role === "developer" ||
+              m.role === "reasoning" ||
+              m.role === "activity" ||
+              m.role === "tool"
+            ) {
+              return null;
+            }
+            if (m.role === "user") {
+              const isFirst = userIndex === 0;
+              userIndex++;
+              return (
+                <UserBubble
+                  key={m.id}
+                  content={m.content ?? ""}
+                  isFirst={isFirst}
+                />
+              );
+            }
+            if (m.role === "assistant") {
+              return (
+                <AssistantBubble
+                  key={m.id}
+                  content={m.content ?? ""}
+                  toolCalls={m.toolCalls ?? m.tool_calls ?? []}
+                  toolResultByCallId={toolResultByCallId}
+                />
+              );
+            }
             return null;
-          }
-
-          // Tool result messages render via their parent assistant tool_call
-          // entry instead — skip the duplicate pass here.
-          if (m.role === "tool") return null;
-
-          if (m.role === "user") {
-            return (
-              <UserBubble key={m.id} content={m.content ?? ""} />
-            );
-          }
-
-          if (m.role === "assistant") {
-            return (
-              <AssistantBubble
-                key={m.id}
-                content={m.content ?? ""}
-                toolCalls={m.toolCalls ?? m.tool_calls ?? []}
-                toolResultByCallId={toolResultByCallId}
-              />
-            );
-          }
-
-          return null;
-        })}
+          });
+        })()}
       </div>
     </div>
   );
 }
 
-function UserBubble({ content }: { content: string }) {
+function UserBubble({
+  content,
+  isFirst,
+}: {
+  content: string;
+  isFirst: boolean;
+}) {
   return (
-    <div className="self-end max-w-[80%] py-3">
+    <div
+      className="self-end max-w-[85%] py-4"
+      style={{
+        borderTop: isFirst ? undefined : "1px solid var(--border)",
+        marginTop: isFirst ? undefined : "0.75rem",
+        paddingTop: isFirst ? "0.75rem" : "1.5rem",
+        width: "100%",
+      }}
+    >
       <p
         className="whitespace-pre-wrap text-right text-[15px] leading-relaxed"
         style={{ color: "var(--foreground)" }}

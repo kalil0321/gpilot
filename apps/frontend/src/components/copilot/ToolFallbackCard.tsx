@@ -1,124 +1,138 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useMemo } from "react";
 
 export interface ToolFallbackCardProps {
   name: string;
   /** "in_progress" | "executing" | "complete" | "success" | "error" — varies by tool */
   status: string;
-  /** Tool result, if available (string or pre-stringified JSON). */
+  /** Tool result, if available. Currently unused but kept in the prop
+   *  surface so callers don't need to update. */
   result?: string | undefined;
-  /** Tool args, used as the "running…" payload before the result lands. */
+  /** Tool args. Same. */
   parameters?: unknown;
 }
 
 /**
- * Single-line inline tool-call indicator for the chat stream.
+ * Inline single-line tool-call indicator. Shows a personalized,
+ * human-readable message for each tool the agent invokes — the raw
+ * tool name (`fetch_billing`, `list_resources`) was confusing.
  *
- * Renders as one short row of muted text — a status dot + the tool
- * name in mono, with a tiny `+ payload` toggle that expands inline.
- * No card, no border, no fill: just text that hints at what the
- * agent did without becoming the focal point of the conversation.
+ * Visual phases:
+ *   running → muted text + shimmer sweep across the line
+ *   done    → muted text + small check, no animation
+ *   failed  → muted-destructive text + small ✕
  *
- * Three phases driven by `status`:
- *   running  amber pulsing dot, no toggle yet
- *   done     mint dot, payload toggle revealed
- *   failed   coral dot, payload toggle (error text inside)
+ * No "show payload" anymore — the canvas IS the payload.
  */
-export function ToolFallbackCard({
-  name,
-  status,
-  result,
-  parameters,
-}: ToolFallbackCardProps) {
-  const [open, setOpen] = useState(false);
 
+interface ToolPhrase {
+  running: string;
+  done: string;
+  failed: string;
+}
+
+const TOOL_PHRASES: Record<string, ToolPhrase> = {
+  fetch_billing: {
+    running: "Pulling your GCP billing…",
+    done: "Pulled your billing.",
+    failed: "Couldn't fetch billing.",
+  },
+  list_resources: {
+    running: "Looking up your resources…",
+    done: "Listed your resources.",
+    failed: "Couldn't list resources.",
+  },
+};
+
+function phraseFor(name: string, phase: "running" | "done" | "failed") {
+  const known = TOOL_PHRASES[name];
+  if (known) return known[phase];
+  // Fallback: humanise the snake_case name.
+  const human = name.replace(/_/g, " ");
+  if (phase === "running") return `Running ${human}…`;
+  if (phase === "failed") return `${human} failed.`;
+  return `Finished ${human}.`;
+}
+
+export function ToolFallbackCard({ name, status }: ToolFallbackCardProps) {
   const phase: "running" | "done" | "failed" = useMemo(() => {
     const s = (status ?? "").toLowerCase();
     if (s.includes("error") || s.includes("fail")) return "failed";
-    if (s.includes("complete") || s.includes("success") || s.includes("done")) return "done";
+    if (s.includes("complete") || s.includes("success") || s.includes("done"))
+      return "done";
     return "running";
   }, [status]);
 
-  const dotColor =
-    phase === "running"
-      ? "var(--chart-4)"
-      : phase === "failed"
-        ? "var(--destructive)"
-        : "var(--chart-2)";
-
-  const payload = useMemo(() => {
-    const value = phase === "done" ? (result ?? parameters) : parameters;
-    if (value === undefined || value === null) return "";
-    if (typeof value === "string") {
-      try {
-        return JSON.stringify(JSON.parse(value), null, 2);
-      } catch {
-        return value;
-      }
-    }
-    try {
-      return JSON.stringify(value, null, 2);
-    } catch {
-      return String(value);
-    }
-  }, [parameters, result, phase]);
+  const text = phraseFor(name, phase);
+  const isRunning = phase === "running";
+  const isFailed = phase === "failed";
 
   return (
     <div
-      className="my-1.5 inline-flex flex-col gap-1 text-[12px] leading-relaxed"
-      style={{ color: "var(--muted-foreground)" }}
+      className="my-1.5 inline-flex items-center gap-2 text-[12.5px] leading-relaxed"
+      style={{
+        color: isFailed ? "var(--destructive)" : "var(--muted-foreground)",
+      }}
     >
-      <span className="inline-flex items-center gap-2">
-        <span
-          aria-hidden
-          className="size-1.5 shrink-0 rounded-full"
-          style={{
-            background: dotColor,
-            animation:
-              phase === "running"
-                ? "tool-pulse 1.4s ease-in-out infinite"
-                : undefined,
-          }}
-        />
-        <span className="font-mono">{name}</span>
-        {payload && phase !== "running" ? (
-          <button
-            type="button"
-            onClick={() => setOpen((v) => !v)}
-            className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
-            style={{ color: "inherit" }}
-            aria-expanded={open}
-          >
-            {open ? "−" : "+"} payload
-          </button>
-        ) : null}
-      </span>
-
-      {open && payload ? (
-        <pre
-          className="ml-3.5 mt-0.5 max-h-48 max-w-[400px] overflow-auto rounded-md p-2 font-mono text-[11px] leading-snug"
-          style={{
-            background: "var(--muted)",
-            color: "var(--foreground)",
-            border: "1px solid var(--border)",
-          }}
-        >
-          {payload}
-        </pre>
+      {phase === "done" ? (
+        <CheckGlyph />
+      ) : isFailed ? (
+        <CrossGlyph />
       ) : null}
-
-      <style jsx>{`
-        @keyframes tool-pulse {
-          0%,
-          100% {
-            opacity: 1;
-          }
-          50% {
-            opacity: 0.35;
-          }
+      <span
+        className={isRunning ? "gpilot-shimmer" : undefined}
+        style={
+          isRunning
+            ? {
+                backgroundImage:
+                  "linear-gradient(90deg, var(--muted-foreground) 0%, var(--foreground) 50%, var(--muted-foreground) 100%)",
+                backgroundSize: "200% 100%",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
+              }
+            : undefined
         }
-      `}</style>
+      >
+        {text}
+      </span>
     </div>
+  );
+}
+
+function CheckGlyph() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+      style={{ opacity: 0.85 }}
+    >
+      <path d="M2.5 6.5L5 9l4.5-5.5" />
+    </svg>
+  );
+}
+
+function CrossGlyph() {
+  return (
+    <svg
+      width="12"
+      height="12"
+      viewBox="0 0 12 12"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+      strokeLinecap="round"
+      aria-hidden
+    >
+      <path d="M3 3l6 6M9 3l-6 6" />
+    </svg>
   );
 }

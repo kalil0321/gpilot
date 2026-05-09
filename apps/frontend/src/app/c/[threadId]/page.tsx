@@ -1,6 +1,6 @@
 "use client";
 
-import { PanelLeft, PanelRight } from "lucide-react";
+import { ChevronsLeft, ChevronsRight, PanelLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -125,16 +125,17 @@ function ChatColumn({
           <button
             type="button"
             onClick={onToggleCanvas}
-            aria-label={canvasOpen ? "Close canvas" : "Open canvas"}
-            className="hidden size-8 place-items-center rounded-md transition-colors hover:bg-muted xl:grid"
-            style={{
-              color: canvasOpen
-                ? "var(--foreground)"
-                : "var(--muted-foreground)",
-            }}
-            title="Canvas"
+            aria-label={canvasOpen ? "Hide canvas" : "Show canvas"}
+            className="hidden h-8 items-center gap-1.5 rounded-md px-2 font-mono text-[10px] uppercase tracking-widest transition-colors hover:bg-muted xl:inline-flex"
+            style={{ color: "var(--muted-foreground)" }}
+            title={canvasOpen ? "Hide canvas" : "Show canvas"}
           >
-            <PanelRight size={16} />
+            <span>canvas</span>
+            {canvasOpen ? (
+              <ChevronsRight size={14} />
+            ) : (
+              <ChevronsLeft size={14} />
+            )}
           </button>
           <ThemeToggle />
         </div>

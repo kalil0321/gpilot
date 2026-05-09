@@ -314,12 +314,30 @@ html {
   font-weight: 400;
 }
 
+/* Tool-call shimmer: sweeps a foreground gradient across the message
+   text while a backend tool is running. Used by ToolFallbackCard. */
+@keyframes gpilot-shimmer-sweep {
+  0% { background-position: 100% 0; }
+  100% { background-position: -100% 0; }
+}
+
+.gpilot-shimmer {
+  animation: gpilot-shimmer-sweep 1.6s ease-in-out infinite;
+}
+
 /* Respect prefers-reduced-motion. */
 @media (prefers-reduced-motion: reduce) {
   .gpilot-fade-in,
-  .gpilot-pill-in {
+  .gpilot-pill-in,
+  .gpilot-shimmer {
     animation: none;
     opacity: 1;
+  }
+  .gpilot-shimmer {
+    color: var(--muted-foreground) !important;
+    background: none !important;
+    -webkit-background-clip: unset !important;
+    background-clip: unset !important;
   }
   .gpilot-caret::after {
     animation: none;
