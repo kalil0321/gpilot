@@ -90,24 +90,63 @@
 }
 
 [data-testid="copilot-assistant-toolbar"] {
-  opacity: 0.55;
-  transition: opacity 120ms;
+  opacity: 0;
+  transition: opacity 150ms;
+  margin-top: 0.25rem !important;
 }
 [data-testid="copilot-assistant-message"]:hover [data-testid="copilot-assistant-toolbar"] {
-  opacity: 1;
+  opacity: 0.5;
+}
+[data-testid="copilot-assistant-toolbar"]:hover {
+  opacity: 1 !important;
+}
+
+/* Toolbar buttons (copy / regen / thumbs) — small icons, no fill,
+   tight padding. The default size feels heavy under each message. */
+[data-testid="copilot-assistant-toolbar"] button,
+[data-testid="copilot-user-toolbar"] button,
+[data-testid="copilot-copy-button"],
+[data-testid="copilot-thumbs-up-button"],
+[data-testid="copilot-thumbs-down-button"] {
+  background: transparent !important;
+  border: 0 !important;
+  width: 22px !important;
+  height: 22px !important;
+  padding: 2px !important;
+  border-radius: 3px !important;
+  color: var(--muted-foreground) !important;
+}
+
+[data-testid="copilot-assistant-toolbar"] button:hover,
+[data-testid="copilot-user-toolbar"] button:hover {
+  background: var(--muted) !important;
+  color: var(--foreground) !important;
+}
+
+[data-testid="copilot-assistant-toolbar"] svg,
+[data-testid="copilot-user-toolbar"] svg {
+  width: 14px !important;
+  height: 14px !important;
 }
 
 /* ----------------------------------------------------------------------
    4. INPUT
-   Square corners, single hairline border, no shadow, no fill.
+   Pill-style rounded shell, single hairline border, no shadow, no fill.
 ---------------------------------------------------------------------- */
 [data-testid="copilot-chat-input"],
 .copilotKitInput {
   background: var(--background) !important;
   border: 1px solid var(--border) !important;
-  border-radius: 6px !important;
+  border-radius: 999px !important;
   box-shadow: none !important;
   transition: border-color 120ms;
+}
+
+/* When the input expands (multi-line / attachments), step down to a
+   gentle 18px so the wider shape doesn't read as a stretched pill. */
+[data-testid="copilot-chat-input"][data-layout="expanded"],
+.copilotKitInput[data-layout="expanded"] {
+  border-radius: 18px !important;
 }
 
 [data-testid="copilot-chat-input"]:focus-within,

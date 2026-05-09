@@ -8,22 +8,22 @@ export interface ToolFallbackCardProps {
   status: string;
   /** Tool result, if available (string or pre-stringified JSON). */
   result?: string | undefined;
-  /** Tool args; used as the "running…" payload before the result lands. */
+  /** Tool args, used as the "running…" payload before the result lands. */
   parameters?: unknown;
 }
 
 /**
- * Inline-in-chat card rendered for every tool call the agent makes.
+ * Single-line inline tool-call indicator for the chat stream.
  *
- * Wired via `useDefaultRenderTool({ render: ToolFallbackCard })` in
- * `app/page.tsx` so the user sees what the agent is doing during
- * multi-second MCP cold-starts. Without this, tool calls happen
- * invisibly and the chat sits silent for 3-5s.
+ * Renders as one short row of muted text — a status dot + the tool
+ * name in mono, with a tiny `+ payload` toggle that expands inline.
+ * No card, no border, no fill: just text that hints at what the
+ * agent did without becoming the focal point of the conversation.
  *
- * Three visual phases driven by `status`:
- *  - running   amber pulsing dot, "running…" tag (in_progress / executing)
- *  - done      mint dot, "done" tag (complete / success)
- *  - failed    coral dot, "failed" tag (any string containing error/fail)
+ * Three phases driven by `status`:
+ *   running  amber pulsing dot, no toggle yet
+ *   done     mint dot, payload toggle revealed
+ *   failed   coral dot, payload toggle (error text inside)
  */
 export function ToolFallbackCard({
   name,
@@ -42,12 +42,10 @@ export function ToolFallbackCard({
 
   const dotColor =
     phase === "running"
-      ? "var(--chart-4)" // amber
+      ? "var(--chart-4)"
       : phase === "failed"
         ? "var(--destructive)"
-        : "var(--chart-2)"; // mint
-
-  const phaseLabel = phase === "running" ? "running…" : phase;
+        : "var(--chart-2)";
 
   const payload = useMemo(() => {
     const value = phase === "done" ? (result ?? parameters) : parameters;
@@ -68,50 +66,43 @@ export function ToolFallbackCard({
 
   return (
     <div
-      className="my-2 max-w-[420px] rounded-xl border p-3 text-sm shadow-sm"
-      style={{
-        borderColor: "var(--border)",
-        background: "var(--card)",
-        color: "var(--foreground)",
-      }}
+      className="my-1.5 inline-flex flex-col gap-1 text-[12px] leading-relaxed"
+      style={{ color: "var(--muted-foreground)" }}
     >
-      <div className="flex items-center gap-2">
+      <span className="inline-flex items-center gap-2">
         <span
           aria-hidden
-          className="size-2 shrink-0 rounded-full transition-all"
+          className="size-1.5 shrink-0 rounded-full"
           style={{
             background: dotColor,
-            boxShadow:
-              phase === "running" ? `0 0 0 3px ${dotColor}33` : "none",
             animation:
               phase === "running"
                 ? "tool-pulse 1.4s ease-in-out infinite"
                 : undefined,
           }}
         />
-        <span className="font-mono text-[12px]">{name}</span>
-        <span
-          className="ml-auto font-mono text-[10px] uppercase tracking-wide"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          {phaseLabel}
-        </span>
-      </div>
+        <span className="font-mono">{name}</span>
+        {payload && phase !== "running" ? (
+          <button
+            type="button"
+            onClick={() => setOpen((v) => !v)}
+            className="ml-1 opacity-60 hover:opacity-100 transition-opacity"
+            style={{ color: "inherit" }}
+            aria-expanded={open}
+          >
+            {open ? "−" : "+"} payload
+          </button>
+        ) : null}
+      </span>
 
-      {payload ? (
-        <button
-          type="button"
-          onClick={() => setOpen((v) => !v)}
-          className="mt-2 inline-flex items-center gap-1 font-mono text-[10px] uppercase tracking-wide hover:underline"
-          style={{ color: "var(--muted-foreground)" }}
-        >
-          {open ? "hide" : "show"} payload
-        </button>
-      ) : null}
       {open && payload ? (
         <pre
-          className="mt-2 max-h-48 overflow-auto rounded-md p-2 font-mono text-[11px] leading-snug"
-          style={{ background: "var(--muted)", color: "var(--foreground)" }}
+          className="ml-3.5 mt-0.5 max-h-48 max-w-[400px] overflow-auto rounded-md p-2 font-mono text-[11px] leading-snug"
+          style={{
+            background: "var(--muted)",
+            color: "var(--foreground)",
+            border: "1px solid var(--border)",
+          }}
         >
           {payload}
         </pre>
@@ -121,12 +112,10 @@ export function ToolFallbackCard({
         @keyframes tool-pulse {
           0%,
           100% {
-            transform: scale(1);
             opacity: 1;
           }
           50% {
-            transform: scale(1.4);
-            opacity: 0.6;
+            opacity: 0.35;
           }
         }
       `}</style>
