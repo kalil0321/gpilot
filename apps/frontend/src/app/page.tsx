@@ -8,10 +8,17 @@ import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ThemeProvider } from "@/hooks/use-theme";
 
+// Curated to cover both backend tools quickly + read like real prompts
+// the user might actually type. Order: most likely → most varied.
+//   1. fetch_billing (general)
+//   2. list_resources
+//   3. fetch_billing (analysis tone)
+//   4. fetch_billing (specific window)
 const SUGGESTIONS = [
-  "Show me last two months of GCP spend",
-  "List my resources",
-  "What's my biggest cost driver?",
+  "Show me my GCP spend",
+  "What's running in my project?",
+  "Where's my money going?",
+  "How much did I spend last month?",
 ];
 
 const QUEUED_KEY = "gpilot.queuedMessage";
