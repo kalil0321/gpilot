@@ -5,6 +5,8 @@ import {
   createCopilotEndpoint,
 } from "@copilotkit/runtime/v2";
 import { LangGraphAgent } from "@copilotkit/runtime/langgraph";
+import { Client as LangGraphClient } from "@langchain/langgraph-sdk";
+import { Hono } from "hono";
 
 const intelligence = new CopilotKitIntelligence({
   apiKey:
@@ -25,7 +27,13 @@ const agent = new LangGraphAgent({
   },
 });
 
-const app = createCopilotEndpoint({
+// `createCopilotEndpoint` returns a Hono instance with `.basePath(...)`
+// already applied AND a `.all('*')` catch-all already registered. Any
+// route we'd add to that instance is (a) double-prefixed by the
+// basePath and (b) shadowed by the catch-all that runs first. So we
+// build a parent Hono, mount our custom routes on it FIRST, then
+// merge the CopilotKit endpoint's routes.
+const copilotEndpoint = createCopilotEndpoint({
   basePath: "/api/copilotkit",
   runtime: new CopilotRuntime({
     intelligence,
@@ -44,6 +52,50 @@ const app = createCopilotEndpoint({
       ],
     },
   }),
+});
+
+const app = new Hono();
+
+// ---------------------------------------------------------------------------
+// Custom route: direct LangGraph thread-state proxy.
+//
+// CopilotKit Intelligence Platform's `/connect` endpoint (which is what
+// the frontend's `connectAgent` call ends up hitting in INTELLIGENCE
+// runtime mode) is designed to JOIN an active WebSocket session, not
+// REPLAY a completed run's history. Concretely, when a thread's run
+// has ended and its WS session has aged out, the endpoint returns
+// HTTP 204 No Content. The AG-UI client then resolves with `null`
+// credentials, switches to `rxjs.EMPTY`, and the frontend sees zero
+// events → blank chat on refresh.
+//
+// This is by design on the Intelligence side. To get reliable history
+// loading we bypass Intelligence and go straight to LangGraph, which
+// stores the full thread state regardless. The frontend hits this
+// route as a fallback after `connectAgent` settles with empty
+// messages, then populates `agent.state` from the response.
+// ---------------------------------------------------------------------------
+const langgraphClient = new LangGraphClient({
+  apiUrl:
+    process.env.LANGGRAPH_DEPLOYMENT_URL ?? "http://localhost:8133",
+  apiKey: process.env.LANGSMITH_API_KEY ?? "",
+});
+
+app.get("/api/copilotkit/thread-state/:threadId", async (c) => {
+  const threadId = c.req.param("threadId");
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(threadId)) {
+    return c.json({ error: "Invalid thread id" }, 400);
+  }
+  try {
+    const state = await langgraphClient.threads.getState(threadId);
+    return c.json(state);
+  } catch (err: unknown) {
+    const status =
+      (err as { status?: number; response?: { status?: number } })?.status ??
+      (err as { response?: { status?: number } })?.response?.status ??
+      500;
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg }, status === 404 ? 404 : 500);
+  }
 });
 
 // Rewrite known 5xx error bodies into structured `{ error, hint, command }`
@@ -101,6 +153,10 @@ app.use("*", async (c, next) => {
     return;
   }
 });
+
+// Mount the CopilotKit endpoint LAST so its catch-all only matches
+// after our specific routes have had their chance.
+app.route("/", copilotEndpoint);
 
 const port = Number(process.env.PORT) || 4000;
 

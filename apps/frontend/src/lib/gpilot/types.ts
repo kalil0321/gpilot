@@ -140,6 +140,19 @@ export function mergeAgentState(raw: unknown): AgentState {
     terminal_log: partial.terminal_log ?? initialAgentState.terminal_log,
     sandbox_files: partial.sandbox_files ?? initialAgentState.sandbox_files,
     sandbox_preview: partial.sandbox_preview ?? initialAgentState.sandbox_preview,
-    dynamic_widgets: partial.dynamic_widgets ?? initialAgentState.dynamic_widgets,
+    // Defensive: drop entries that aren't objects with a string `kind`.
+    // The LangGraph thread state (which our connectAgent fallback
+    // pulls in via setState) sometimes contains malformed leftovers —
+    // partially-streamed widgets, nulls, or dicts without `kind` —
+    // that would otherwise render as "unknown widget: (invalid)" on
+    // the canvas. Filtering at merge time keeps the renderer clean.
+    dynamic_widgets: Array.isArray(partial.dynamic_widgets)
+      ? partial.dynamic_widgets.filter(
+          (w): w is WidgetSpec =>
+            !!w &&
+            typeof w === "object" &&
+            typeof (w as { kind?: unknown }).kind === "string",
+        )
+      : initialAgentState.dynamic_widgets,
   };
 }

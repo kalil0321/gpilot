@@ -20,6 +20,7 @@ frontend is expected to honor.
 
 from __future__ import annotations
 
+import logging
 import os
 
 from dotenv import load_dotenv
@@ -33,6 +34,30 @@ from src.runtime import build_graph
 
 # Load .env early so GEMINI_API_KEY / NOTION_TOKEN / ANTHROPIC_API_KEY are visible.
 load_dotenv()
+
+
+# `langchain_google_genai._function_utils` logs a warning every time it
+# converts a tool schema that contains Pydantic v2's `$schema` /
+# `$defs` / `title` meta-keys. The conversion still works (the keys
+# get silently ignored downstream) — the noise just clutters every
+# turn. We filter that one log message at boot so the agent log stays
+# focused on actual problems.
+class _GeminiSchemaNoiseFilter(logging.Filter):
+    _NOISY_FRAGMENTS = ("'$schema'", "'$defs'", "'title'")
+
+    def filter(self, record: logging.LogRecord) -> bool:
+        try:
+            msg = record.getMessage()
+        except Exception:  # noqa: BLE001
+            return True
+        if "is not supported in schema" not in msg:
+            return True
+        return not any(frag in msg for frag in self._NOISY_FRAGMENTS)
+
+
+logging.getLogger("langchain_google_genai._function_utils").addFilter(
+    _GeminiSchemaNoiseFilter()
+)
 
 
 # `langgraph dev` uses an in-memory checkpoint store, so every agent boot

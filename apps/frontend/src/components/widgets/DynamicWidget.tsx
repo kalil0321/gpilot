@@ -35,8 +35,17 @@ import { useWidgetActions } from "@/lib/gpilot/widget-actions";
  *    so a chatty agent doesn't sprawl.
  */
 export function DynamicWidget({ widget }: { widget: WidgetSpec }) {
+  // Invalid widget shape — render nothing rather than a placeholder.
+  // The placeholder used to fire on stale or malformed entries (e.g.
+  // when the LangGraph fallback loads a thread whose dynamic_widgets
+  // array contains nulls or non-object items) and just polluted the
+  // canvas. Silent skip is the safer default; per-render warnings stay
+  // dev-only.
   if (!widget || typeof widget !== "object" || typeof widget.kind !== "string") {
-    return <UnknownWidget kind="(invalid)" />;
+    if (process.env.NODE_ENV !== "production") {
+      console.warn("[gpilot] DynamicWidget skipped invalid spec:", widget);
+    }
+    return null;
   }
   switch (widget.kind) {
     case "stack":

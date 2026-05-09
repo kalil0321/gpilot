@@ -198,8 +198,26 @@ function ChatLayoutInner({
   // refresh.
   useEffect(() => {
     if (!agent || !threadId) return;
-    const a = agent as typeof agent & { abortController?: AbortController };
+    const a = agent as typeof agent & {
+      abortController?: AbortController;
+      messages?: unknown[];
+      state?: unknown;
+    };
     a.threadId = threadId as string;
+
+    // Clear stale agent.state from the previous thread by direct field
+    // mutation. agent.state is a singleton across threads and contains
+    // canvas slots — `dynamic_widgets`, `resources`, `sandbox_*`,
+    // `header`, `sync`. Without clearing, switching to thread B shows
+    // thread A's widgets/cards/sandbox preview until B's connectAgent
+    // (or first tool call) replaces the values.
+    //
+    // Direct field assignment (vs `setState`) skips the subscriber
+    // notification — same trick we use for messages — which avoids
+    // the rxjs "Cannot read properties of undefined (reading 'name')"
+    // crash that bare `setState({})` triggers downstream. The visual
+    // CanvasPane re-reads agent.state on the next render anyway.
+    a.state = {};
 
     if (isNewThread) {
       setConnecting(false);
@@ -212,16 +230,6 @@ function ChatLayoutInner({
     if ("abortController" in a) {
       a.abortController = ctl;
     }
-    // Diagnostic logging for the intermittent "history doesn't load on
-    // refresh" bug. Remove once we've nailed the cause.
-    const t0 = performance.now();
-    console.debug("[gpilot:connect] start", {
-      threadId,
-      hadMessages: (a as typeof a & { messages?: unknown[] }).messages?.length ?? 0,
-      hadStateMessages:
-        ((a as typeof a & { state?: { messages?: unknown[] } }).state?.messages
-          ?.length ?? 0),
-    });
     copilotkit
       .connectAgent({ agent })
       .catch((err: unknown) => {
@@ -229,18 +237,40 @@ function ChatLayoutInner({
         console.error("connectAgent failed", err);
         if (isUnusableThreadError(err)) router.replace("/");
       })
-      .finally(() => {
-        if (!detached) setConnecting(false);
-        console.debug("[gpilot:connect] settled", {
-          threadId,
-          ms: Math.round(performance.now() - t0),
-          detached,
-          messages:
-            (a as typeof a & { messages?: unknown[] }).messages?.length ?? 0,
-          stateMessages:
-            ((a as typeof a & { state?: { messages?: unknown[] } }).state
-              ?.messages?.length ?? 0),
-        });
+      .finally(async () => {
+        if (detached) return;
+        setConnecting(false);
+        // Backstop: Intelligence Platform's `/connect` endpoint
+        // returns HTTP 204 once a thread's WS session ages out, even
+        // though the messages are still on file. The frontend AG-UI
+        // pipeline interprets the 204 as `rxjs.EMPTY` and silently
+        // loads nothing. We hit our LangGraph backdoor route to grab
+        // the actual thread state and populate `agent.state` —
+        // ChatMessages already falls back to `state.messages` when
+        // `agent.messages` is empty.
+        const aMsgs =
+          (a as typeof a & { messages?: unknown[] }).messages ?? [];
+        const sMsgs =
+          ((a as typeof a & { state?: { messages?: unknown[] } }).state
+            ?.messages ?? []) as unknown[];
+        if (aMsgs.length === 0 && sMsgs.length === 0) {
+          try {
+            const resp = await fetch(
+              `/api/copilotkit/thread-state/${threadId}`,
+            );
+            if (resp.ok) {
+              const payload = (await resp.json()) as {
+                values?: Record<string, unknown>;
+              };
+              if (payload?.values && typeof payload.values === "object") {
+                (a as typeof a & { setState: (s: unknown) => void })
+                  .setState(payload.values);
+              }
+            }
+          } catch (err) {
+            console.warn("[gpilot] thread-state fallback failed", err);
+          }
+        }
       });
     return () => {
       detached = true;
