@@ -11,7 +11,9 @@ export type ResourceType =
   | "project"
   | "service"
   | "deployment"
-  | "billing_period";
+  | "billing_period"
+  | "dataset"
+  | "bucket";
 
 export interface GCPResource {
   id: string;

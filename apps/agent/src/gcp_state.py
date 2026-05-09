@@ -29,7 +29,7 @@ class _SyncMeta(TypedDict, total=False):
 
 class _GCPResource(TypedDict, total=False):
     id: str
-    type: str  # "project" | "service" | "deployment" | "billing_period"
+    type: str  # "project" | "service" | "deployment" | "billing_period" | "dataset" | "bucket"
     name: str
     region: str
     status: str

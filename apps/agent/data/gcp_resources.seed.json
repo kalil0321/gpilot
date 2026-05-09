@@ -42,7 +42,7 @@
     },
     {
       "id": "dataset:billing_export",
-      "type": "project",
+      "type": "dataset",
       "name": "billing_export",
       "region": "us",
       "status": "active",
@@ -56,7 +56,7 @@
     },
     {
       "id": "bucket:gpilot-demo-assets",
-      "type": "project",
+      "type": "bucket",
       "name": "gpilot-demo-assets",
       "region": "us-central1",
       "status": "active",
