@@ -48,14 +48,14 @@ def fetch_billing(
         from .gcp_store import get_store
 
         store = get_store()
-        rows = store.billing_periods(months=months)
+        rows, source = store.billing_periods_with_source(months=months)
 
         if not rows:
             return Command(
                 update={
                     "messages": [
                         ToolMessage(
-                            content=f"No billing data available (source={store.source_label()}).",
+                            content=f"No billing data available (source={source}).",
                             tool_call_id=tool_call_id,
                         )
                     ],
@@ -93,7 +93,7 @@ def fetch_billing(
         summary = (
             f"Last {months} month(s): ${total_cost:.2f} total. "
             f"Top service: {top_service} (${top_cost:.2f}). "
-            f"Source: {store.source_label()}."
+            f"Source: {source}."
         )
 
         return Command(
@@ -105,7 +105,7 @@ def fetch_billing(
                     "subtitle": summary,
                 },
                 "sync": {
-                    "source": store.source_label(),
+                    "source": source,
                     "syncedAt": now_iso,
                 },
                 "messages": [
@@ -139,14 +139,14 @@ def list_resources(
         from .gcp_store import get_store
 
         store = get_store()
-        rows = store.resources()
+        rows, source = store.resources_with_source()
 
         if not rows:
             return Command(
                 update={
                     "messages": [
                         ToolMessage(
-                            content=f"No resources to show (source={store.source_label()}).",
+                            content=f"No resources to show (source={source}).",
                             tool_call_id=tool_call_id,
                         )
                     ],
@@ -160,7 +160,7 @@ def list_resources(
         summary = (
             f"{len(rows)} resources ({services} Cloud Run services). "
             f"Combined MTD spend: ${total_mtd:.2f}. "
-            f"Source: {store.source_label()}."
+            f"Source: {source}."
         )
 
         return Command(
@@ -171,7 +171,7 @@ def list_resources(
                     "subtitle": summary,
                 },
                 "sync": {
-                    "source": store.source_label(),
+                    "source": source,
                     "syncedAt": now_iso,
                 },
                 "messages": [

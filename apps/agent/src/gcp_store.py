@@ -2,13 +2,16 @@
 
 Resolves at boot to one of three modes based on env:
 
-  source=gcp   BIGQUERY_MCP_URL + GCLOUD_MCP_URL set → live MCP path
-  source=seed  no MCP creds → bundled seed JSON (good demo, offline-OK)
-  source=mixed e.g. only BigQuery configured → live billing + seed Cloud Run
+  source=gcp   gcloud + BigQuery MCPs both wired AND data-flowing
+  source=mixed at least one path live, others seeded (e.g. gcloud live,
+               BQ MCP wired but the export table doesn't exist yet)
+  source=seed  nothing wired
 
-The agent doesn't know which mode is active. It calls `get_store()` and
-gets back rows in the canonical shape. That keeps the prompt + tool
-surface simple and the seed→live cutover invisible.
+The store exposes `billing_periods_with_source(months)` and
+`resources_with_source()` — they return `(rows, source_label)` so the
+@tool layer can record the *actual* source per-call rather than the
+configured-at-boot label, which would lie when the BQ MCP is set but
+the table hasn't populated.
 """
 
 from __future__ import annotations
@@ -36,6 +39,14 @@ class Store(Protocol):
     def resources(self) -> List[Dict[str, Any]]: ...
     def source_label(self) -> str: ...
     def is_live(self) -> bool: ...
+    # Returns (rows, label) where label is "gcp" if rows came from live
+    # BQ, otherwise "seed" (or a sub-tagged "seed (BQ export pending)").
+    def billing_periods_with_source(
+        self, months: int
+    ) -> tuple[List[Dict[str, Any]], str]: ...
+    def resources_with_source(
+        self,
+    ) -> tuple[List[Dict[str, Any]], str]: ...
 
 
 # --- Seed-only store ----------------------------------------------------
@@ -57,6 +68,16 @@ class SeedStore:
         with _RESOURCES_SEED.open("r", encoding="utf-8") as f:
             doc = json.load(f)
         return list(doc.get("resources", []))
+
+    def billing_periods_with_source(
+        self, months: int
+    ) -> tuple[List[Dict[str, Any]], str]:
+        return self.billing_periods(months), "seed"
+
+    def resources_with_source(
+        self,
+    ) -> tuple[List[Dict[str, Any]], str]:
+        return self.resources(), "seed"
 
     def source_label(self) -> str:
         return "seed"
@@ -81,33 +102,75 @@ class GCPStore:
         self._seed = SeedStore()
 
     def billing_periods(self, months: int) -> List[Dict[str, Any]]:
+        rows, _ = self.billing_periods_with_source(months)
+        return rows
+
+    def billing_periods_with_source(
+        self, months: int
+    ) -> tuple[List[Dict[str, Any]], str]:
+        """Return billing rows + the source label for THIS call.
+
+        Falls through to seed (with a 'seed (BQ export pending)' tag)
+        when BIGQUERY_MCP_COMMAND is set but the export table is missing
+        or empty — that's the typical state in the first 24h after
+        enabling BQ billing export.
+        """
         if not gcp_mcp.has_bigquery():
-            return self._seed.billing_periods(months)
+            return self._seed.billing_periods(months), "seed"
         try:
-            rows = gcp_integration.fetch_billing(months=months, dataset=self._dataset)
-        except (gcp_mcp.NotConfiguredError, Exception):  # noqa: BLE001
-            return self._seed.billing_periods(months)
-        return rows or self._seed.billing_periods(months)
+            rows = gcp_integration.fetch_billing(
+                months=months, dataset=self._dataset
+            )
+        except gcp_mcp.NotConfiguredError:
+            return self._seed.billing_periods(months), "seed"
+        except Exception:  # noqa: BLE001 — BQ raises lots of shapes
+            return (
+                self._seed.billing_periods(months),
+                "seed (BQ export pending)",
+            )
+        if not rows:
+            return (
+                self._seed.billing_periods(months),
+                "seed (BQ export pending)",
+            )
+        return rows, "gcp"
 
     def resources(self) -> List[Dict[str, Any]]:
+        rows, _ = self.resources_with_source()
+        return rows
+
+    def resources_with_source(
+        self,
+    ) -> tuple[List[Dict[str, Any]], str]:
+        """Return resources + source label for THIS call.
+
+        Live Cloud Run services + project info get merged with seeded
+        non-compute resources (BQ datasets, GCS buckets) so the canvas
+        stays full while we add per-product MCPs.
+        """
         if not gcp_mcp.has_gcloud():
-            return self._seed.resources()
+            return self._seed.resources(), "seed"
         try:
-            services = gcp_integration.fetch_run_services(project_id=self._project_id)
+            services = gcp_integration.fetch_run_services(
+                project_id=self._project_id
+            )
             project = gcp_integration.fetch_project_info(self._project_id)
         except (gcp_mcp.NotConfiguredError, Exception):  # noqa: BLE001
-            return self._seed.resources()
-        # Live Cloud Run + project info; storage/dataset entries stay
-        # seeded until we wire dedicated MCPs for those.
+            return self._seed.resources(), "seed"
         non_compute_seeds = [
-            r for r in self._seed.resources() if r.get("type") not in {"service", "project"}
+            r
+            for r in self._seed.resources()
+            if r.get("type") not in {"service", "project"}
         ]
         out: List[Dict[str, Any]] = []
         if project:
             out.append(project)
         out.extend(services)
         out.extend(non_compute_seeds)
-        return out
+        # Live project + Cloud Run, plus seeded non-compute extras.
+        # Label as "gcp" because the live data dominates; the buckets/
+        # datasets are seed-only because we don't have MCPs for those.
+        return out, "gcp" if project or services else "seed"
 
     def source_label(self) -> str:
         bq = gcp_mcp.has_bigquery()
