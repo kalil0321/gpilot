@@ -101,8 +101,8 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
 
     // ----- size-driven class strings ------------------------------------
     const cardCls = isLg
-      ? "rounded-2xl border transition-colors focus-within:border-foreground"
-      : "rounded-2xl border transition-colors focus-within:border-foreground";
+      ? "rounded-2xl border focus-within:border-foreground"
+      : "rounded-2xl border focus-within:border-foreground";
 
     const textAreaWrapCls = isLg ? "px-5 pt-4 pb-1" : "px-4 pt-3 pb-1";
 
