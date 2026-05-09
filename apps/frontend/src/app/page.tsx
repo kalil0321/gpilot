@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { useCallback, useEffect, useState } from "react";
 
 import { Logo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ThemeProvider } from "@/hooks/use-theme";
 
@@ -57,9 +58,12 @@ function Entry() {
 
   return (
     <main
-      className="flex min-h-screen items-center justify-center px-6"
+      className="relative flex min-h-screen items-center justify-center px-6"
       style={{ background: "var(--background)" }}
     >
+      <div className="absolute right-4 top-4">
+        <ThemeToggle />
+      </div>
       <div className="flex w-full max-w-2xl flex-col items-center gap-10">
         <div
           className="gpilot-fade-in text-5xl"

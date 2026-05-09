@@ -1,22 +1,23 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 
-:root {
-  --background: #EDEDF5;
-  --foreground: #010507;
+:root,
+.light {
+  --background: #FAFAFA;
+  --foreground: #0A0A0B;
   --card: #FFFFFF;
-  --card-foreground: #010507;
-  --primary: #010507;
-  --primary-foreground: #FFFFFF;
+  --card-foreground: #0A0A0B;
+  --primary: #0A0A0B;
+  --primary-foreground: #FAFAFA;
   --secondary: #5C8568;
   --secondary-foreground: #FFFFFF;
-  --muted: #F7F7F9;
-  --muted-foreground: #57575B;
+  --muted: #F4F4F5;
+  --muted-foreground: #6B6B70;
   --accent: #5C8568;
   --accent-foreground: #FFFFFF;
-  --destructive: #FA5F67;
+  --destructive: #E84B53;
   --destructive-foreground: #FFFFFF;
-  --border: #DBDBE5;
+  --border: #E4E4E7;
   --input: #FFFFFF;
   --ring: rgba(92, 133, 104, 0.5);
   --chart-1: #5C8568;
@@ -26,13 +27,46 @@
   --chart-5: #FFF388;
   --radius: 0.75rem;
   --sidebar: #FFFFFF;
-  --sidebar-foreground: #010507;
-  --sidebar-primary: #010507;
-  --sidebar-primary-foreground: #FFFFFF;
+  --sidebar-foreground: #0A0A0B;
+  --sidebar-primary: #0A0A0B;
+  --sidebar-primary-foreground: #FAFAFA;
   --sidebar-accent: #5C8568;
   --sidebar-accent-foreground: #FFFFFF;
-  --sidebar-border: #DBDBE5;
+  --sidebar-border: #E4E4E7;
   --sidebar-ring: rgba(92, 133, 104, 0.5);
+}
+
+.dark {
+  --background: #0A0A0B;
+  --foreground: #F2F2F2;
+  --card: #131315;
+  --card-foreground: #F2F2F2;
+  --primary: #F2F2F2;
+  --primary-foreground: #0A0A0B;
+  --secondary: #7AA585;
+  --secondary-foreground: #0A0A0B;
+  --muted: #1B1B1D;
+  --muted-foreground: #9C9CA0;
+  --accent: #7AA585;
+  --accent-foreground: #0A0A0B;
+  --destructive: #F26168;
+  --destructive-foreground: #0A0A0B;
+  --border: #26262A;
+  --input: #1B1B1D;
+  --ring: rgba(122, 165, 133, 0.55);
+  --chart-1: #7AA585;
+  --chart-2: #85ECCE;
+  --chart-3: #5DA8F0;
+  --chart-4: #FFB766;
+  --chart-5: #FFF09A;
+  --sidebar: #0F0F11;
+  --sidebar-foreground: #F2F2F2;
+  --sidebar-primary: #F2F2F2;
+  --sidebar-primary-foreground: #0A0A0B;
+  --sidebar-accent: #7AA585;
+  --sidebar-accent-foreground: #0A0A0B;
+  --sidebar-border: #26262A;
+  --sidebar-ring: rgba(122, 165, 133, 0.55);
 }
 
 @theme inline {

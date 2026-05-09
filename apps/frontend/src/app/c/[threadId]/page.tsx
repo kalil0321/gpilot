@@ -13,6 +13,7 @@ import { CanvasPane } from "@/components/chat/CanvasPane";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ChatMessages } from "@/components/chat/ChatMessages";
 import { Logo } from "@/components/brand/Logo";
+import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ThreadsDrawer } from "@/components/threads-drawer";
 import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -94,18 +95,18 @@ function ChatColumn({
         className="flex items-center justify-between border-b px-4 py-3"
         style={{ borderColor: "var(--border)" }}
       >
-        <div className="flex items-center gap-1.5">
-          {!drawerOpen ? (
-            <button
-              type="button"
-              onClick={onOpenDrawer}
-              aria-label="Open threads"
-              className="grid size-8 place-items-center rounded-md transition-colors hover:bg-muted"
-              style={{ color: "var(--muted-foreground)" }}
-            >
-              <PanelLeft size={16} />
-            </button>
-          ) : null}
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={onOpenDrawer}
+            aria-label={drawerOpen ? "Threads open" : "Open threads"}
+            disabled={drawerOpen}
+            className="grid size-8 place-items-center rounded-md transition-colors hover:bg-muted disabled:opacity-30"
+            style={{ color: "var(--muted-foreground)" }}
+            title="Threads"
+          >
+            <PanelLeft size={16} />
+          </button>
           <button
             type="button"
             onClick={() => router.push("/")}
@@ -116,6 +117,7 @@ function ChatColumn({
             <Logo />
           </button>
         </div>
+        <ThemeToggle />
       </header>
 
       <ChatMessages />
