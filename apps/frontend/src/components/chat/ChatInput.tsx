@@ -45,7 +45,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
     {
       onSubmit,
       busy,
-      placeholder = "Type a message…",
+      placeholder = "What's next?",
       autoFocus,
       suggestions,
       size = "default",
