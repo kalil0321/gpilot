@@ -3,17 +3,12 @@
 import {
   Archive,
   ArchiveRestore,
-  BookOpen,
   ChevronLeft,
   ChevronRight,
-  Code2,
-  ExternalLink,
   Filter,
-  Info,
   Moon,
   Plus,
   Search,
-  Sparkles,
   SquarePen,
   Sun,
   Trash2,
@@ -21,6 +16,7 @@ import {
 import { useCallback, useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useThreads } from "@copilotkit/react-core/v2";
+import { Logo } from "@/components/brand/Logo";
 import { useTheme } from "@/hooks/use-theme";
 import styles from "./threads-drawer.module.css";
 
@@ -42,44 +38,6 @@ const THREAD_ENTRY_ANIMATION_MS = 420;
 const TITLE_ANIMATION_MS = 360;
 const UNTITLED_THREAD_LABEL = "New thread";
 const RUNTIME_BASE_PATH = "/api/copilotkit";
-
-const DOC_LINKS: Array<{
-  label: string;
-  href: string;
-  icon: typeof BookOpen;
-  external?: boolean;
-}> = [
-  {
-    label: "About this Kit",
-    href: "/about",
-    icon: Info,
-    external: false,
-  },
-  {
-    label: "Tool surface",
-    href: "/showcase",
-    icon: Sparkles,
-    external: false,
-  },
-  {
-    label: "Documentation",
-    href: "https://docs.copilotkit.ai/",
-    icon: BookOpen,
-    external: true,
-  },
-  {
-    label: "Intelligence Platform",
-    href: "https://docs.copilotkit.ai/learn/intelligence-platform",
-    icon: Sparkles,
-    external: true,
-  },
-  {
-    label: "Coding Agents",
-    href: "https://docs.copilotkit.ai/coding-agents",
-    icon: Code2,
-    external: true,
-  },
-];
 
 function formatRelativeTime(isoTimestamp: string): string {
   const timestamp = new Date(isoTimestamp);
@@ -358,11 +316,7 @@ export default function ThreadsDrawer({
 
         <div className={styles.drawerSurface}>
           <div className={styles.brandRow}>
-            <img
-              alt="CopilotKit"
-              className={styles.brandLogo}
-              src="/copilotkit-logo.svg"
-            />
+            <Logo className={styles.brandWordmark} />
             <button
               aria-label="Collapse threads drawer"
               className={styles.iconButton}
@@ -393,29 +347,6 @@ export default function ThreadsDrawer({
                 onChange={(e) => setSearchQuery(e.target.value)}
               />
             </div>
-          </nav>
-
-          <nav aria-label="Resources" className={styles.navList}>
-            {DOC_LINKS.map(({ label, href, icon: Icon, external = true }) => (
-              <a
-                key={href}
-                className={styles.navItem}
-                href={href}
-                {...(external
-                  ? { target: "_blank", rel: "noopener noreferrer" }
-                  : {})}
-              >
-                <Icon aria-hidden size={16} />
-                <span>{label}</span>
-                {external ? (
-                  <ExternalLink
-                    aria-hidden
-                    className={styles.navItemExternal}
-                    size={12}
-                  />
-                ) : null}
-              </a>
-            ))}
           </nav>
 
           <div className={styles.sectionHeader}>
@@ -617,25 +548,6 @@ export default function ThreadsDrawer({
           </div>
 
           <div className={styles.drawerFooter}>
-            <a
-              className={cx(styles.navItem, styles.navItemFlex)}
-              href="https://www.copilotkit.ai/"
-              rel="noopener noreferrer"
-              target="_blank"
-            >
-              <img
-                alt=""
-                aria-hidden
-                className={styles.navItemMark}
-                src="/copilotkit-logo-mark.svg"
-              />
-              <span>copilotkit.ai</span>
-              <ExternalLink
-                aria-hidden
-                className={styles.navItemExternal}
-                size={12}
-              />
-            </a>
             <button
               aria-label={
                 resolvedTheme === "dark"

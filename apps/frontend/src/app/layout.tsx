@@ -22,9 +22,8 @@ const splineMono = Spline_Sans_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "AG-UI Canvas | CopilotKit Hackathon Starter",
-  description:
-    "Hackathon starter kit: CopilotKit canvas + threads drawer + Deep Agents + Gemini + Notion MCP",
+  title: "gpilot",
+  description: "Agentic interface for Google Cloud.",
 };
 
 export default function RootLayout({

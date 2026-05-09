@@ -71,14 +71,12 @@
   padding: 1rem 0.875rem 0.875rem;
 }
 
-.brandLogo {
-  height: 1.25rem;
-  width: auto;
-  object-fit: contain;
-}
-
-:global(.dark) .brandLogo {
-  filter: invert(1);
+.brandWordmark {
+  font-size: 0.95rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--foreground);
+  padding-left: 0.125rem;
 }
 
 .iconButton {

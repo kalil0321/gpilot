@@ -1,7 +1,7 @@
 [project]
 name = "agent"
 version = "0.1.0"
-description = "LangChain Deep Agents backend for the CopilotKit hackathon starter kit (canvas + Gemini + Notion MCP)."
+description = "LangGraph Deep Agents backend for gpilot."
 requires-python = ">=3.11"
 readme = "README.md"
 dependencies = [
