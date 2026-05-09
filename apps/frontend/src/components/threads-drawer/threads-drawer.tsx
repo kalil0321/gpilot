@@ -3,7 +3,6 @@
 import {
   Archive,
   ArchiveRestore,
-  ChevronLeft,
   ChevronRight,
   Filter,
   Plus,
@@ -271,14 +270,17 @@ export default function ThreadsDrawer({
           <div className={styles.collapsedRailTop}>
             <button
               aria-label="Open threads drawer"
+              title="Open"
               className={styles.iconButton}
               type="button"
               onClick={() => setIsOpen(true)}
             >
               <ChevronRight size={18} />
             </button>
+            <div aria-hidden className={styles.collapsedRailDivider} />
             <button
               aria-label="New chat"
+              title="New chat"
               className={styles.iconButton}
               type="button"
               onClick={() => onThreadChange(undefined)}
@@ -287,6 +289,7 @@ export default function ThreadsDrawer({
             </button>
             <button
               aria-label="Search threads"
+              title="Search threads"
               className={styles.iconButton}
               type="button"
               onClick={() => setIsOpen(true)}
@@ -319,14 +322,7 @@ export default function ThreadsDrawer({
 
         <div className={styles.drawerSurface}>
           <div className={styles.brandRow}>
-            <button
-              aria-label="Collapse threads drawer"
-              className={styles.iconButton}
-              type="button"
-              onClick={() => setIsOpen(false)}
-            >
-              <ChevronLeft size={18} />
-            </button>
+            <span className={styles.brandLabel}>your threads</span>
           </div>
 
           <nav aria-label="Primary" className={styles.navList}>

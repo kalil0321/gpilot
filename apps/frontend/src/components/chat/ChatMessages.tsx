@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useAgent } from "@copilotkit/react-core/v2";
 import { ToolFallbackCard } from "@/components/copilot/ToolFallbackCard";
+import { ThinkingIndicator } from "./ThinkingIndicator";
 
 /**
  * Render the AG-UI `agent.messages` array as a chat stream.
@@ -38,7 +39,7 @@ type AnyMessage = {
   name?: string;
 };
 
-export function ChatMessages() {
+export function ChatMessages({ busy = false }: { busy?: boolean }) {
   const { agent } = useAgent();
   const messages = (agent?.messages ?? []) as AnyMessage[];
 
@@ -49,7 +50,21 @@ export function ChatMessages() {
     const el = containerRef.current;
     if (!el) return;
     el.scrollTop = el.scrollHeight;
-  }, [messages.length, messages[messages.length - 1]?.content]);
+  }, [messages.length, messages[messages.length - 1]?.content, busy]);
+
+  // "Thinking" placeholder shows when the agent is running AND the most
+  // recent visible message isn't an assistant turn that already has
+  // content (or a streaming tool call). That catches the silent window
+  // between user-submit and the first assistant token.
+  const lastVisible = [...messages]
+    .reverse()
+    .find((m) => m.role === "user" || m.role === "assistant");
+  const lastIsAssistantWithSomething =
+    lastVisible?.role === "assistant" &&
+    ((lastVisible.content && lastVisible.content.trim().length > 0) ||
+      (lastVisible.toolCalls && lastVisible.toolCalls.length > 0) ||
+      (lastVisible.tool_calls && lastVisible.tool_calls.length > 0));
+  const showThinking = busy && !lastIsAssistantWithSomething;
 
   // Build a quick lookup so we can pair each tool message back to its
   // originating assistant toolCall (for the status display).
@@ -107,6 +122,7 @@ export function ChatMessages() {
             return null;
           });
         })()}
+        {showThinking ? <ThinkingIndicator /> : null}
       </div>
     </div>
   );

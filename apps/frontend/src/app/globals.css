@@ -325,6 +325,18 @@ html {
   animation: gpilot-shimmer-sweep 1.6s ease-in-out infinite;
 }
 
+/* Thinking indicator — three dots that pulse from 35% to 100% opacity. */
+@keyframes gpilot-thinking-pulse {
+  0%, 60%, 100% {
+    opacity: 0.35;
+    transform: scale(0.85);
+  }
+  30% {
+    opacity: 1;
+    transform: scale(1.05);
+  }
+}
+
 /* Respect prefers-reduced-motion. */
 @media (prefers-reduced-motion: reduce) {
   .gpilot-fade-in,

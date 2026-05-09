@@ -41,12 +41,12 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
 
 function ChatColumn({
   drawerOpen,
-  onOpenDrawer,
+  onToggleDrawer,
   canvasOpen,
   onToggleCanvas,
 }: {
   drawerOpen: boolean;
-  onOpenDrawer: () => void;
+  onToggleDrawer: () => void;
   canvasOpen: boolean;
   onToggleCanvas: () => void;
 }) {
@@ -102,12 +102,16 @@ function ChatColumn({
         <div className="flex items-center gap-2">
           <button
             type="button"
-            onClick={onOpenDrawer}
-            aria-label={drawerOpen ? "Threads open" : "Open threads"}
-            disabled={drawerOpen}
-            className="grid size-8 place-items-center rounded-md transition-colors hover:bg-muted disabled:opacity-30"
-            style={{ color: "var(--muted-foreground)" }}
-            title="Threads"
+            onClick={onToggleDrawer}
+            aria-label={drawerOpen ? "Hide threads" : "Show threads"}
+            aria-pressed={drawerOpen}
+            className="grid size-8 place-items-center rounded-md transition-colors hover:bg-muted"
+            style={{
+              color: drawerOpen
+                ? "var(--foreground)"
+                : "var(--muted-foreground)",
+            }}
+            title={drawerOpen ? "Hide threads" : "Show threads"}
           >
             <PanelLeft size={16} />
           </button>
@@ -141,7 +145,7 @@ function ChatColumn({
         </div>
       </header>
 
-      <ChatMessages />
+      <ChatMessages busy={busy} />
 
       <div className="px-4 pb-3 pt-1">
         <div className="mx-auto max-w-3xl">
@@ -184,7 +188,7 @@ function ChatLayout() {
           <div className="flex">
             <ChatColumn
               drawerOpen={drawerOpen}
-              onOpenDrawer={() => setDrawerOpen(true)}
+              onToggleDrawer={() => setDrawerOpen((v) => !v)}
               canvasOpen={canvasOpen}
               onToggleCanvas={() => setCanvasOpen((v) => !v)}
             />
