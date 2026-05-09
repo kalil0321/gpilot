@@ -1,11 +1,11 @@
-"""Switchable runtime factory for the lead-triage agent.
+"""Switchable runtime factory for the gpilot agent.
 
 Selects one of three configurations based on `AGENT_RUNTIME` so we can
 side-by-side benchmark Gemini-Flash-Lite-deepagents vs. Gemini-Flash-Lite-react
 vs. Claude-Sonnet-4.6-react without a code edit.
 
 Every runtime keeps the same middleware chain — `TimingMiddleware` first
-(outermost) so it sees every inner model/tool call, then `LeadStateMiddleware`
+(outermost) so it sees every inner model/tool call, then `GCPStateMiddleware`
 to contribute the canvas-state TypedDict, and `CopilotKitMiddleware` for
 AG-UI / CopilotKit interop.
 
@@ -22,7 +22,7 @@ from langgraph.graph.state import CompiledStateGraph
 
 from copilotkit import CopilotKitMiddleware
 
-from .lead_state import LeadStateMiddleware
+from .gcp_state import GCPStateMiddleware
 from .timing import TimingMiddleware
 
 
@@ -79,9 +79,9 @@ def build_graph(
         runtime = "gemini-flash-deep"
 
     timing = TimingMiddleware()
-    lead_state = LeadStateMiddleware()
+    gcp_state = GCPStateMiddleware()
     copilotkit = CopilotKitMiddleware()
-    middleware = [timing, lead_state, copilotkit]
+    middleware = [timing, gcp_state, copilotkit]
 
     if runtime == "noop":
         return _build_noop(NOOP_FALLBACK_MESSAGE)

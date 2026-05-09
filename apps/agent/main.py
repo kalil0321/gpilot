@@ -4,19 +4,18 @@ Wires:
 - A switchable runtime (Gemini Flash-Lite + deepagents | Gemini Flash-Lite + react |
   Claude Sonnet 4.6 + react) selected by `AGENT_RUNTIME`. See
   `src/runtime.py` and the README's "Switching to a different model".
-- Notion-MCP-backed backend tools (always present; Notion read goes through
-  the official `@notionhq/notion-mcp-server` via mcp-use)
+- GCP-MCP-backed backend tools (Phase 2+; Phase 1 ships an empty list).
 - TimingMiddleware (per-turn wall-time logging — see `src/timing.py`)
-- LeadStateMiddleware + CopilotKitMiddleware for canvas state + AG-UI
+- GCPStateMiddleware + CopilotKitMiddleware for canvas state + AG-UI
 
-Frontend tools (`createItem`, `setItemName`, `setProjectField1`, etc.) are
-declared on the React side via `useFrontendTool({ name, parameters,
-handler })` in `src/app/page.tsx`. The runtime forwards those declarations
-into the agent's tool list at run time, so we deliberately do NOT include
-the Python `frontend_tool_stubs` here — adding them would cause Gemini to
-reject the request with "Duplicate function declaration found: <name>".
-The Python stubs in `agent/src/canvas.py` exist purely as documentation of
-the contract the frontend is expected to honor.
+Frontend tools (state mutators) are declared on the React side via
+`useFrontendTool({ name, parameters, handler })`. The runtime forwards
+those declarations into the agent's tool list at run time, so we
+deliberately do NOT include the Python `frontend_tool_stubs` here —
+adding them would cause Gemini to reject the request with "Duplicate
+function declaration found: <name>". The Python stubs in
+`agent/src/canvas.py` exist purely as documentation of the contract the
+frontend is expected to honor.
 """
 
 from __future__ import annotations
@@ -25,9 +24,9 @@ import os
 
 from dotenv import load_dotenv
 
+from src.gcp_store import boot_status as _gcp_store_boot_status
+from src.gcp_tools import load_gcp_tools
 from src.intelligence_cleanup import wipe_orphan_threads
-from src.lead_store import boot_status as _lead_store_boot_status
-from src.notion_tools import load_notion_tools
 from src.prompts import build_system_prompt
 from src.runtime import build_graph
 
@@ -46,22 +45,21 @@ wipe_orphan_threads()
 
 
 def _format_integration_status() -> str:
-    """Run the boot-time lead-store health check and format a status string.
+    """Run the boot-time GCP-store health check and format a status string.
 
-    Reports whichever store is active — Notion when both NOTION_TOKEN
-    and NOTION_LEADS_DATABASE_ID are set, the bundled local JSON
-    otherwise. Logs a one-liner so `npm run dev` tails show the active
-    source clearly. The returned string is interpolated into the system
-    prompt so the agent can refuse-with-reason when something is off
-    rather than silently returning an empty board.
+    Reports whichever source is active — live GCP (BigQuery + Cloud Run)
+    when creds are set, the bundled seed JSON otherwise. The returned
+    string is interpolated into the system prompt so the agent can
+    refuse-with-reason when something is off rather than silently
+    returning an empty canvas.
     """
     try:
-        line = _lead_store_boot_status()
+        line = _gcp_store_boot_status()
     except Exception as e:  # noqa: BLE001 - never block agent boot on this
-        print(f"[lead_store] FAILED: {e}", flush=True)
-        return f"error: lead_store boot_status raised: {e}"
+        print(f"[gcp_store] FAILED: {e}", flush=True)
+        return f"error: gcp_store boot_status raised: {e}"
 
-    print(f"[lead_store] {line}", flush=True)
+    print(f"[gcp_store] {line}", flush=True)
     return line
 
 
@@ -83,7 +81,7 @@ if _AGENT_RUNTIME.startswith("gemini-") and (
     )
 
 
-backend_tools = load_notion_tools()
+backend_tools = load_gcp_tools()
 
 
 _integration_status = _format_integration_status()
