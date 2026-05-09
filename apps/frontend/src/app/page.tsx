@@ -58,41 +58,65 @@ function Entry() {
 
   return (
     <main
-      className="relative flex min-h-screen items-center justify-center px-6"
+      className="relative flex min-h-screen flex-col px-6"
       style={{ background: "var(--background)" }}
     >
-      <div className="absolute right-4 top-4">
-        <ThemeToggle />
-      </div>
-      <div className="flex w-full max-w-2xl flex-col items-center gap-10">
+      {/* Top bar: brand mark on the left, theme toggle on the right */}
+      <div className="flex items-center justify-between py-5">
         <div
-          className="gpilot-fade-in text-5xl"
+          className="gpilot-fade-in text-[15px]"
           style={{
             color: "var(--foreground)",
             fontWeight: 600,
-            letterSpacing: "-0.03em",
+            letterSpacing: "-0.01em",
             animationDelay: "0ms",
           }}
         >
           <Logo />
         </div>
+        <div className="gpilot-fade-in" style={{ animationDelay: "60ms" }}>
+          <ThemeToggle />
+        </div>
+      </div>
 
-        <div
-          className="gpilot-fade-in w-full"
-          style={{ animationDelay: "120ms" }}
-        >
-          <ChatInput
-            onSubmit={handleSubmit}
-            busy={busy}
-            autoFocus
-            size="lg"
-            placeholder="What do you want to do with your cloud?"
-            suggestions={SUGGESTIONS}
-          />
+      {/* Centered hero: greeting + input + suggestions */}
+      <div className="flex flex-1 items-center justify-center">
+        <div className="flex w-full max-w-2xl flex-col items-stretch gap-6 pb-20">
+          <h1
+            className="gpilot-fade-in text-center text-[28px] tracking-tight sm:text-[32px]"
+            style={{
+              color: "var(--foreground)",
+              fontWeight: 500,
+              letterSpacing: "-0.02em",
+              animationDelay: "100ms",
+            }}
+          >
+            Where do we start{getGreetingPunctuation()}
+          </h1>
+
+          <div
+            className="gpilot-fade-in w-full"
+            style={{ animationDelay: "180ms" }}
+          >
+            <ChatInput
+              onSubmit={handleSubmit}
+              busy={busy}
+              autoFocus
+              size="lg"
+              placeholder="Ask gpilot to fetch billing, list resources, or deploy a service…"
+              suggestions={SUGGESTIONS}
+            />
+          </div>
         </div>
       </div>
     </main>
   );
+}
+
+/** Returns "?" for now — keeps the greeting punctuation a single source
+ *  of truth so we can swap the line wholesale later. */
+function getGreetingPunctuation() {
+  return "?";
 }
 
 export default function Page() {

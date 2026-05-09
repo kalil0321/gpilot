@@ -3,58 +3,63 @@
 
 :root,
 .light {
-  --background: #FAFAFA;
+  --background: #EFEFEF;
   --foreground: #0A0A0B;
-  --card: #FFFFFF;
+  --card: #F7F7F7;
   --card-foreground: #0A0A0B;
   --primary: #0A0A0B;
   --primary-foreground: #FAFAFA;
-  --secondary: #5C8568;
-  --secondary-foreground: #FFFFFF;
-  --muted: #F4F4F5;
+  /* Monochrome: secondary & accent collapse onto foreground. The brand
+   * Logo's trailing period thus reads as foreground (no colour noise).
+   * If you want a real accent later, override these two only. */
+  --secondary: #0A0A0B;
+  --secondary-foreground: #FAFAFA;
+  --muted: #E8E8E8;
   --muted-foreground: #6B6B70;
-  --accent: #5C8568;
-  --accent-foreground: #FFFFFF;
+  --accent: #0A0A0B;
+  --accent-foreground: #FAFAFA;
   --destructive: #E84B53;
   --destructive-foreground: #FFFFFF;
-  --border: #E4E4E7;
-  --input: #FFFFFF;
-  --ring: rgba(92, 133, 104, 0.5);
-  --chart-1: #5C8568;
+  --border: #DDDDDD;
+  --input: #F7F7F7;
+  --ring: rgba(10, 10, 11, 0.18);
+  /* Chart palette stays — the chart bars need *some* colour to be
+   * legible. These are the existing kit colours minus the lavender. */
+  --chart-1: #4A7080;
   --chart-2: #85ECCE;
   --chart-3: #3D92E8;
   --chart-4: #FFAC4D;
   --chart-5: #FFF388;
   --radius: 0.75rem;
-  --sidebar: #FFFFFF;
+  --sidebar: #F7F7F7;
   --sidebar-foreground: #0A0A0B;
   --sidebar-primary: #0A0A0B;
   --sidebar-primary-foreground: #FAFAFA;
-  --sidebar-accent: #5C8568;
-  --sidebar-accent-foreground: #FFFFFF;
-  --sidebar-border: #E4E4E7;
-  --sidebar-ring: rgba(92, 133, 104, 0.5);
+  --sidebar-accent: #0A0A0B;
+  --sidebar-accent-foreground: #FAFAFA;
+  --sidebar-border: #DDDDDD;
+  --sidebar-ring: rgba(10, 10, 11, 0.18);
 }
 
 .dark {
   --background: #0A0A0B;
   --foreground: #F2F2F2;
-  --card: #131315;
+  --card: #141416;
   --card-foreground: #F2F2F2;
   --primary: #F2F2F2;
   --primary-foreground: #0A0A0B;
-  --secondary: #7AA585;
+  --secondary: #F2F2F2;
   --secondary-foreground: #0A0A0B;
   --muted: #1B1B1D;
   --muted-foreground: #9C9CA0;
-  --accent: #7AA585;
+  --accent: #F2F2F2;
   --accent-foreground: #0A0A0B;
   --destructive: #F26168;
   --destructive-foreground: #0A0A0B;
   --border: #26262A;
-  --input: #1B1B1D;
-  --ring: rgba(122, 165, 133, 0.55);
-  --chart-1: #7AA585;
+  --input: #141416;
+  --ring: rgba(242, 242, 242, 0.22);
+  --chart-1: #88AABB;
   --chart-2: #85ECCE;
   --chart-3: #5DA8F0;
   --chart-4: #FFB766;
@@ -63,10 +68,10 @@
   --sidebar-foreground: #F2F2F2;
   --sidebar-primary: #F2F2F2;
   --sidebar-primary-foreground: #0A0A0B;
-  --sidebar-accent: #7AA585;
+  --sidebar-accent: #F2F2F2;
   --sidebar-accent-foreground: #0A0A0B;
   --sidebar-border: #26262A;
-  --sidebar-ring: rgba(122, 165, 133, 0.55);
+  --sidebar-ring: rgba(242, 242, 242, 0.22);
 }
 
 @theme inline {
