@@ -60,13 +60,13 @@ function Entry() {
       className="flex min-h-screen items-center justify-center px-6"
       style={{ background: "var(--background)" }}
     >
-      <div className="flex w-full max-w-xl flex-col items-center gap-8">
+      <div className="flex w-full max-w-2xl flex-col items-center gap-10">
         <div
-          className="text-3xl"
+          className="text-5xl"
           style={{
             color: "var(--foreground)",
             fontWeight: 600,
-            letterSpacing: "-0.02em",
+            letterSpacing: "-0.03em",
           }}
         >
           <Logo />
@@ -76,6 +76,7 @@ function Entry() {
           onSubmit={handleSubmit}
           busy={busy}
           autoFocus
+          size="lg"
           placeholder="What do you want to do with your cloud?"
           suggestions={SUGGESTIONS}
         />

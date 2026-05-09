@@ -1,5 +1,6 @@
 "use client";
 
+import { PanelLeft } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -37,7 +38,13 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function ChatColumn() {
+function ChatColumn({
+  drawerOpen,
+  onOpenDrawer,
+}: {
+  drawerOpen: boolean;
+  onOpenDrawer: () => void;
+}) {
   const router = useRouter();
   const { agent } = useAgent();
   const { copilotkit } = useCopilotKit();
@@ -84,18 +91,31 @@ function ChatColumn() {
   return (
     <div className="flex h-screen flex-1 flex-col overflow-hidden">
       <header
-        className="flex items-center justify-between border-b px-6 py-3"
+        className="flex items-center justify-between border-b px-4 py-3"
         style={{ borderColor: "var(--border)" }}
       >
-        <button
-          type="button"
-          onClick={() => router.push("/")}
-          className="text-[14px] transition-opacity hover:opacity-80"
-          style={{ color: "var(--foreground)" }}
-          title="New chat"
-        >
-          <Logo />
-        </button>
+        <div className="flex items-center gap-1.5">
+          {!drawerOpen ? (
+            <button
+              type="button"
+              onClick={onOpenDrawer}
+              aria-label="Open threads"
+              className="grid size-8 place-items-center rounded-md transition-colors hover:bg-muted"
+              style={{ color: "var(--muted-foreground)" }}
+            >
+              <PanelLeft size={16} />
+            </button>
+          ) : null}
+          <button
+            type="button"
+            onClick={() => router.push("/")}
+            className="text-[14px] transition-opacity hover:opacity-80"
+            style={{ color: "var(--foreground)" }}
+            title="New chat"
+          >
+            <Logo />
+          </button>
+        </div>
       </header>
 
       <ChatMessages />
@@ -116,6 +136,10 @@ function ChatLayout() {
   const params = useParams<{ threadId: string }>();
   const threadId = params?.threadId;
   const router = useRouter();
+  // Drawer starts CLOSED on the chat page so the focus is on the
+  // conversation. The user opens it via the menu button in the chat
+  // header (or the existing collapsed-strip chevron on the left edge).
+  const [drawerOpen, setDrawerOpen] = useState(false);
 
   if (!threadId) return null;
 
@@ -128,11 +152,16 @@ function ChatLayout() {
           if (next === undefined) router.push("/");
           else router.push(`/c/${next}`);
         }}
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
       />
       <div className={drawerStyles.mainPanel}>
         <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
           <div className="flex">
-            <ChatColumn />
+            <ChatColumn
+              drawerOpen={drawerOpen}
+              onOpenDrawer={() => setDrawerOpen(true)}
+            />
             <CanvasPane />
           </div>
         </CopilotChatConfigurationProvider>

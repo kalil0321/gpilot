@@ -24,6 +24,10 @@ export interface ThreadsDrawerProps {
   agentId: string;
   threadId: string | undefined;
   onThreadChange: (threadId: string | undefined) => void;
+  /** Controlled open state. Omit for the previous uncontrolled behaviour
+   *  (drawer manages its own state, defaults to open). */
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 interface DrawerThread {
@@ -78,9 +82,18 @@ export default function ThreadsDrawer({
   agentId,
   threadId,
   onThreadChange,
+  open: openProp,
+  onOpenChange,
 }: ThreadsDrawerProps) {
   const [showArchived, setShowArchived] = useState(false);
-  const [isOpen, setIsOpen] = useState(true);
+  // Controlled when `openProp` is supplied; otherwise uncontrolled with
+  // a sensible default of open.
+  const [internalOpen, setInternalOpen] = useState(true);
+  const isOpen = openProp ?? internalOpen;
+  const setIsOpen = (next: boolean) => {
+    if (openProp === undefined) setInternalOpen(next);
+    onOpenChange?.(next);
+  };
   const [pendingDelete, setPendingDelete] = useState<{
     id: string;
     title: string;

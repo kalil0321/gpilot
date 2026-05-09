@@ -23,6 +23,8 @@ interface ChatInputProps {
   autoFocus?: boolean;
   /** Optional starter suggestions, rendered below the input. Click → submits. */
   suggestions?: string[];
+  /** Visual scale. `lg` is for the entry-point hero; default is for in-chat. */
+  size?: "default" | "lg";
 }
 
 export interface ChatInputHandle {
@@ -38,11 +40,19 @@ export interface ChatInputHandle {
  */
 export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
   function ChatInput(
-    { onSubmit, busy, placeholder = "Type a message…", autoFocus, suggestions },
+    {
+      onSubmit,
+      busy,
+      placeholder = "Type a message…",
+      autoFocus,
+      suggestions,
+      size = "default",
+    },
     ref,
   ) {
     const textareaRef = useRef<HTMLTextAreaElement>(null);
     const [value, setValue] = useState("");
+    const isLg = size === "lg";
 
     useImperativeHandle(ref, () => ({
       focus: () => textareaRef.current?.focus(),
@@ -54,10 +64,10 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       const el = textareaRef.current;
       if (!el) return;
       el.style.height = "auto";
-      const lineHeight = 22;
+      const lineHeight = isLg ? 28 : 22;
       const max = lineHeight * 6;
       el.style.height = Math.min(el.scrollHeight, max) + "px";
-    }, []);
+    }, [isLg]);
 
     useEffect(() => {
       resize();
@@ -89,11 +99,29 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
       }
     };
 
+    const formCls = isLg
+      ? "flex items-end gap-3 rounded-3xl border px-5 py-3.5 transition-colors focus-within:border-foreground"
+      : "flex items-end gap-2 rounded-3xl border px-4 py-2.5 transition-colors focus-within:border-foreground";
+
+    const textareaCls = isLg
+      ? "flex-1 resize-none border-0 bg-transparent text-[17px] leading-[28px] outline-none placeholder:opacity-50 disabled:opacity-60"
+      : "flex-1 resize-none border-0 bg-transparent text-[15px] leading-[22px] outline-none placeholder:opacity-50 disabled:opacity-60";
+
+    const sendCls = isLg
+      ? "grid size-11 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30 hover:opacity-80"
+      : "grid size-8 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30 hover:opacity-80";
+
+    const sendIconSize = isLg ? 20 : 16;
+
+    const pillCls = isLg
+      ? "rounded-full border px-4 py-2.5 text-[14px] transition-colors hover:bg-muted disabled:opacity-50"
+      : "rounded-full border px-3 py-1.5 text-[12px] transition-colors hover:bg-muted disabled:opacity-50";
+
     return (
       <div className="w-full">
         <form
           onSubmit={handleSubmit}
-          className="flex items-end gap-2 rounded-3xl border px-4 py-2.5 transition-colors focus-within:border-foreground"
+          className={formCls}
           style={{
             borderColor: "var(--border)",
             background: "var(--background)",
@@ -107,32 +135,38 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
             rows={1}
             placeholder={placeholder}
             disabled={busy}
-            className="flex-1 resize-none border-0 bg-transparent text-[15px] leading-[22px] outline-none placeholder:opacity-50 disabled:opacity-60"
+            className={textareaCls}
             style={{ color: "var(--foreground)" }}
           />
           <button
             type="submit"
             disabled={!value.trim() || busy}
             aria-label="Send"
-            className="grid size-8 shrink-0 place-items-center rounded-full transition-opacity disabled:opacity-30 hover:opacity-80"
+            className={sendCls}
             style={{
               background: "var(--foreground)",
               color: "var(--background)",
             }}
           >
-            <ArrowUp size={16} strokeWidth={2.5} />
+            <ArrowUp size={sendIconSize} strokeWidth={2.5} />
           </button>
         </form>
 
         {suggestions && suggestions.length > 0 ? (
-          <div className="mt-3 flex flex-wrap justify-center gap-2">
+          <div
+            className={
+              isLg
+                ? "mt-5 flex flex-wrap justify-center gap-2.5"
+                : "mt-3 flex flex-wrap justify-center gap-2"
+            }
+          >
             {suggestions.map((s) => (
               <button
                 key={s}
                 type="button"
                 onClick={() => submit(s)}
                 disabled={busy}
-                className="rounded-full border px-3 py-1.5 text-[12px] transition-colors hover:bg-muted disabled:opacity-50"
+                className={pillCls}
                 style={{
                   borderColor: "var(--border)",
                   color: "var(--muted-foreground)",
