@@ -113,8 +113,16 @@ function ChatColumn({
   );
 
   // Flush any queued message from the entry point on mount (one-time).
+  // CRITICAL: must run AFTER connectAgent settles. Otherwise we have a
+  // race: connect's "messages snapshot from server" lands mid-stream
+  // and wipes the user message we just added, so runAgent sends an
+  // empty contents list to Gemini and the API rejects with
+  // "contents are required". Gating on `!connecting` makes the flush
+  // wait for connect to finish (success or fail — either way it's safe
+  // to populate the thread).
   useEffect(() => {
-    if (flushedQueueRef.current || !agent) return;
+    if (flushedQueueRef.current) return;
+    if (!agent || connecting) return;
     let queued: string | null = null;
     try {
       queued = sessionStorage.getItem(QUEUED_KEY);
@@ -126,7 +134,7 @@ function ChatColumn({
       flushedQueueRef.current = true;
       void sendMessage(queued);
     }
-  }, [agent, sendMessage]);
+  }, [agent, connecting, sendMessage]);
 
   return (
     <div className="flex h-screen flex-1 flex-col overflow-hidden">
