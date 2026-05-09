@@ -147,16 +147,41 @@ class GCPStore:
         Live Cloud Run services + project info get merged with seeded
         non-compute resources (BQ datasets, GCS buckets) so the canvas
         stays full while we add per-product MCPs.
+
+        The two live calls (services list + project describe) are
+        independent, so we run them in parallel via threads. That
+        roughly halves wall-time vs sequential MCP cold-starts (each
+        spawn is ~2.5s — see _run_sync's per-call session model).
         """
         if not gcp_mcp.has_gcloud():
             return self._seed.resources(), "seed"
-        try:
-            services = gcp_integration.fetch_run_services(
-                project_id=self._project_id
-            )
-            project = gcp_integration.fetch_project_info(self._project_id)
-        except (gcp_mcp.NotConfiguredError, Exception):  # noqa: BLE001
+
+        from concurrent.futures import ThreadPoolExecutor
+
+        def _safe_services() -> List[Dict[str, Any]]:
+            try:
+                return gcp_integration.fetch_run_services(
+                    project_id=self._project_id
+                )
+            except Exception:  # noqa: BLE001
+                return []
+
+        def _safe_project() -> Optional[Dict[str, Any]]:
+            try:
+                return gcp_integration.fetch_project_info(self._project_id)
+            except Exception:  # noqa: BLE001
+                return None
+
+        with ThreadPoolExecutor(max_workers=2) as pool:
+            f_services = pool.submit(_safe_services)
+            f_project = pool.submit(_safe_project)
+            services = f_services.result()
+            project = f_project.result()
+
+        # Both failed → seed everything.
+        if project is None and not services:
             return self._seed.resources(), "seed"
+
         non_compute_seeds = [
             r
             for r in self._seed.resources()
@@ -167,10 +192,7 @@ class GCPStore:
             out.append(project)
         out.extend(services)
         out.extend(non_compute_seeds)
-        # Live project + Cloud Run, plus seeded non-compute extras.
-        # Label as "gcp" because the live data dominates; the buckets/
-        # datasets are seed-only because we don't have MCPs for those.
-        return out, "gcp" if project or services else "seed"
+        return out, "gcp"
 
     def source_label(self) -> str:
         bq = gcp_mcp.has_bigquery()

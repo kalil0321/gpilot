@@ -5,11 +5,13 @@ import {
   CopilotChatConfigurationProvider,
   CopilotSidebar,
   useAgent,
+  useDefaultRenderTool,
 } from "@copilotkit/react-core/v2";
 
 import { BillingChartCard } from "@/components/gpilot/BillingChartCard";
 import { Header } from "@/components/gpilot/Header";
 import { ResourceCard } from "@/components/gpilot/ResourceCard";
+import { ToolFallbackCard } from "@/components/copilot/ToolFallbackCard";
 import { ThreadsDrawer } from "@/components/threads-drawer";
 import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
 import { ThemeProvider } from "@/hooks/use-theme";
@@ -34,6 +36,21 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
 function CanvasInner() {
   const { agent } = useAgent();
   const state = useMemo(() => mergeAgentState(agent?.state), [agent?.state]);
+
+  // Render every backend tool call inline in the chat — the user can see
+  // exactly what the agent is doing during multi-second MCP cold-starts.
+  // Without this hook, the chat goes silent for 3-5s while gcloud-mcp /
+  // BigQuery MCP boot fresh per call.
+  useDefaultRenderTool({
+    render: ({ name, status, result, args }) => (
+      <ToolFallbackCard
+        name={name}
+        status={String(status ?? "")}
+        result={typeof result === "string" ? result : JSON.stringify(result)}
+        parameters={args}
+      />
+    ),
+  });
 
   const hasContent =
     state.billing_periods.length > 0 || state.resources.length > 0;

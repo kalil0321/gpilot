@@ -62,9 +62,8 @@ def fetch_billing(
                 }
             )
 
-        # Aggregate by service across the window. The chart consumes the
-        # full per-(month, service) rows; this aggregate just drives the
-        # "top services" cards and the human summary.
+        # Aggregate by service for the human summary only — the chart
+        # itself consumes the full per-(month, service) rows.
         totals: Dict[str, float] = defaultdict(float)
         for r in rows:
             totals[r["service"]] += float(r["cost_usd"])
@@ -74,32 +73,21 @@ def fetch_billing(
 
         now_iso = datetime.now(timezone.utc).isoformat(timespec="seconds")
 
-        # Cost cards — one per top-5 service. We keep them as
-        # type='billing_period' so the frontend can render them with a
-        # dedicated card component (vs Cloud Run service cards).
-        cost_cards: List[Dict[str, Any]] = []
-        for service, cost in top_sorted[:5]:
-            cost_cards.append(
-                {
-                    "id": f"billing:{service}",
-                    "type": "billing_period",
-                    "name": service,
-                    "cost_usd_mtd": round(cost, 2),
-                    "metadata": {"window_months": months},
-                    "last_updated": now_iso,
-                }
-            )
-
         summary = (
             f"Last {months} month(s): ${total_cost:.2f} total. "
             f"Top service: {top_service} (${top_cost:.2f}). "
             f"Source: {source}."
         )
 
+        # Billing view is billing only: chart + header + sync. We
+        # explicitly clear `resources` so a previous list_resources
+        # call doesn't leave stale Cloud Run cards alongside the chart
+        # — the user complained that mixing the two surfaces is
+        # confusing. To see resources, the user re-invokes list_resources.
         return Command(
             update={
                 "billing_periods": rows,
-                "resources": cost_cards,
+                "resources": [],
                 "header": {
                     "title": "GCP Billing",
                     "subtitle": summary,
@@ -163,9 +151,14 @@ def list_resources(
             f"Source: {source}."
         )
 
+        # Resources view is resources only: clear billing_periods so a
+        # previous fetch_billing call doesn't leave a stale chart above
+        # the resource grid (mirror of fetch_billing's clear-resources
+        # behaviour — each tool gives one view).
         return Command(
             update={
                 "resources": rows,
+                "billing_periods": [],
                 "header": {
                     "title": "GCP Resources",
                     "subtitle": summary,
