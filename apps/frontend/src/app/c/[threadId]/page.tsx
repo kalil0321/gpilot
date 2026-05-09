@@ -53,7 +53,20 @@ function ChatColumn({
   const { copilotkit } = useCopilotKit();
 
   const [busy, setBusy] = useState(false);
-  const [connecting, setConnecting] = useState(true);
+  // A "new thread" is one we just minted on `/` and navigated here with
+  // a queued message in sessionStorage. The backend doesn't have the
+  // thread yet, so connectAgent would 404 and the skeleton would flash
+  // for nothing. We detect newness synchronously in useState init so
+  // the first paint already knows to skip the loading state.
+  const [isNewThread] = useState(() => {
+    if (typeof window === "undefined") return false;
+    try {
+      return window.sessionStorage.getItem(QUEUED_KEY) !== null;
+    } catch {
+      return false;
+    }
+  });
+  const [connecting, setConnecting] = useState(() => !isNewThread);
   const flushedQueueRef = useRef(false);
 
   // Hydrate the thread's message history on mount / threadId change.
@@ -64,16 +77,25 @@ function ChatColumn({
   // (the connectAgent block around line 220).
   useEffect(() => {
     if (!agent || !threadId) return;
+    // Brand-new thread (minted on the entry page, not yet on the
+    // backend): skip connectAgent. There's nothing to load and a 404
+    // would still flash the skeleton for ~300ms. The threadId still
+    // gets assigned to the agent so runAgent uses it.
+    const a = agent as typeof agent & { abortController?: AbortController };
+    a.threadId = threadId as string;
+    if (isNewThread) {
+      setConnecting(false);
+      return;
+    }
+
     let detached = false;
     setConnecting(true);
     const ctl = new AbortController();
     // HttpAgent reads from .abortController; setting it lets us cancel
     // the in-flight connect on unmount / threadId change.
-    const a = agent as typeof agent & { abortController?: AbortController };
     if ("abortController" in a) {
       a.abortController = ctl;
     }
-    a.threadId = threadId as string;
     copilotkit
       .connectAgent({ agent })
       .catch((err: unknown) => {
@@ -90,7 +112,7 @@ function ChatColumn({
         // ignore
       }
     };
-  }, [agent, threadId, copilotkit]);
+  }, [agent, threadId, copilotkit, isNewThread]);
 
   const sendMessage = useCallback(
     async (text: string) => {
