@@ -40,9 +40,11 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
 }
 
 function ChatColumn({
+  threadId,
   canvasOpen,
   onToggleCanvas,
 }: {
+  threadId: string;
   canvasOpen: boolean;
   onToggleCanvas: () => void;
 }) {
@@ -52,6 +54,36 @@ function ChatColumn({
 
   const [busy, setBusy] = useState(false);
   const flushedQueueRef = useRef(false);
+
+  // Hydrate the thread's message history on mount / threadId change.
+  // CopilotChat does this internally; we have a custom chat surface so
+  // we must call connectAgent ourselves — without it `agent.messages`
+  // stays empty after a page refresh and prior turns are invisible.
+  // Pattern mirrored from @copilotkit/react-core/v2/CopilotChat.tsx
+  // (the connectAgent block around line 220).
+  useEffect(() => {
+    if (!agent || !threadId) return;
+    let detached = false;
+    const ctl = new AbortController();
+    // HttpAgent reads from .abortController; setting it lets us cancel
+    // the in-flight connect on unmount / threadId change.
+    const a = agent as typeof agent & { abortController?: AbortController };
+    if ("abortController" in a) {
+      a.abortController = ctl;
+    }
+    a.threadId = threadId as string;
+    void copilotkit.connectAgent({ agent }).catch((err: unknown) => {
+      if (!detached) console.error("connectAgent failed", err);
+    });
+    return () => {
+      detached = true;
+      try {
+        ctl.abort();
+      } catch {
+        // ignore
+      }
+    };
+  }, [agent, threadId, copilotkit]);
 
   const sendMessage = useCallback(
     async (text: string) => {
@@ -225,6 +257,7 @@ function ChatLayout() {
         <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
           <div className="flex">
             <ChatColumn
+              threadId={threadId}
               canvasOpen={canvasOpen}
               onToggleCanvas={() => setCanvasOpen((v) => !v)}
             />
