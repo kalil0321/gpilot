@@ -32,7 +32,7 @@ SELECT
   service.description AS service,
   ROUND(SUM(cost), 2) AS cost_usd
 FROM `{dataset}.gcp_billing_export_v1_*`
-WHERE usage_start_time >= TIMESTAMP_SUB(CURRENT_TIMESTAMP(), INTERVAL {months} MONTH)
+WHERE DATE(usage_start_time) >= DATE_SUB(CURRENT_DATE(), INTERVAL {months} MONTH)
 GROUP BY month, service
 ORDER BY month, cost_usd DESC
 """.strip()
