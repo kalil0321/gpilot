@@ -1,6 +1,6 @@
 "use client";
 
-import { ChevronsLeft, ChevronsRight, PanelLeft } from "lucide-react";
+import { ChevronsLeft, ChevronsRight } from "lucide-react";
 import { useParams, useRouter } from "next/navigation";
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
@@ -40,13 +40,9 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
 }
 
 function ChatColumn({
-  drawerOpen,
-  onToggleDrawer,
   canvasOpen,
   onToggleCanvas,
 }: {
-  drawerOpen: boolean;
-  onToggleDrawer: () => void;
   canvasOpen: boolean;
   onToggleCanvas: () => void;
 }) {
@@ -99,32 +95,15 @@ function ChatColumn({
         className="flex items-center justify-between border-b px-4 py-3"
         style={{ borderColor: "var(--border)" }}
       >
-        <div className="flex items-center gap-2">
-          <button
-            type="button"
-            onClick={onToggleDrawer}
-            aria-label={drawerOpen ? "Hide threads" : "Show threads"}
-            aria-pressed={drawerOpen}
-            className="grid size-8 place-items-center rounded-md transition-colors hover:bg-muted"
-            style={{
-              color: drawerOpen
-                ? "var(--foreground)"
-                : "var(--muted-foreground)",
-            }}
-            title={drawerOpen ? "Hide threads" : "Show threads"}
-          >
-            <PanelLeft size={16} />
-          </button>
-          <button
-            type="button"
-            onClick={() => router.push("/")}
-            className="text-[14px] transition-opacity hover:opacity-80"
-            style={{ color: "var(--foreground)" }}
-            title="New chat"
-          >
-            <Logo />
-          </button>
-        </div>
+        <button
+          type="button"
+          onClick={() => router.push("/")}
+          className="text-[14px] transition-opacity hover:opacity-80"
+          style={{ color: "var(--foreground)" }}
+          title="New chat"
+        >
+          <Logo />
+        </button>
         <div className="flex items-center gap-1.5">
           <button
             type="button"
@@ -246,8 +225,6 @@ function ChatLayout() {
         <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
           <div className="flex">
             <ChatColumn
-              drawerOpen={drawerOpen}
-              onToggleDrawer={() => setDrawerOpen((v) => !v)}
               canvasOpen={canvasOpen}
               onToggleCanvas={() => setCanvasOpen((v) => !v)}
             />

@@ -137,7 +137,7 @@ export const ChatInput = forwardRef<ChatInputHandle, ChatInputProps>(
           className={cardCls}
           style={{
             borderColor: "var(--border)",
-            background: "var(--card)",
+            background: "var(--surface-sunken)",
           }}
         >
           <div className={textAreaWrapCls}>

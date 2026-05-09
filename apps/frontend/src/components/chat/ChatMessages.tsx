@@ -146,7 +146,7 @@ function UserBubble({
       <div
         className="max-w-[80%] rounded-2xl px-3.5 py-2.5"
         style={{
-          background: "var(--card)",
+          background: "var(--surface-sunken)",
           color: "var(--foreground)",
           border: "1px solid var(--border)",
         }}

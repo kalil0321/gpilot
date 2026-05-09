@@ -20,8 +20,13 @@
   --accent-foreground: #FAFAFA;
   --destructive: #E84B53;
   --destructive-foreground: #FFFFFF;
-  --border: #DDDDDD;
-  --input: #F7F7F7;
+  /* Border much more subtle — barely darker than the bg. Reads as
+   * "edge present" without painting a stroke. */
+  --border: #E5E5E5;
+  /* Sunken surface for input fields + user message pills — slightly
+   * darker than the page bg to feel pressed into the surface. */
+  --surface-sunken: #E5E5E7;
+  --input: #E5E5E7;
   --ring: rgba(10, 10, 11, 0.18);
   /* Chart palette stays — the chart bars need *some* colour to be
    * legible. These are the existing kit colours minus the lavender. */
@@ -56,8 +61,12 @@
   --accent-foreground: #0A0A0B;
   --destructive: #F26168;
   --destructive-foreground: #0A0A0B;
-  --border: #26262A;
-  --input: #141416;
+  /* Border barely lighter than bg — almost invisible. */
+  --border: #1A1A1C;
+  /* Sunken surface — slightly darker than bg, so input/pill feel
+   * pressed into the page. */
+  --surface-sunken: #060608;
+  --input: #060608;
   --ring: rgba(242, 242, 242, 0.22);
   --chart-1: #88AABB;
   --chart-2: #85ECCE;

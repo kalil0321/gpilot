@@ -4,6 +4,7 @@ import {
   Archive,
   ArchiveRestore,
   Filter,
+  PanelLeft,
   Plus,
   Search,
   SquarePen,
@@ -80,7 +81,6 @@ export default function ThreadsDrawer({
   open: openProp,
   onOpenChange,
 }: ThreadsDrawerProps) {
-  const [showArchived, setShowArchived] = useState(false);
   // Controlled when `openProp` is supplied; otherwise uncontrolled with
   // a sensible default of open.
   const [internalOpen, setInternalOpen] = useState(true);
@@ -108,7 +108,7 @@ export default function ThreadsDrawer({
     fetchMoreThreads,
   } = useThreads({
     agentId,
-    includeArchived: showArchived,
+    includeArchived: false,
     limit: 20,
   });
 
@@ -311,39 +311,26 @@ export default function ThreadsDrawer({
 
         <div className={styles.drawerSurface}>
           <div className={styles.topBar}>
-            <div className={styles.searchPill}>
-              <Search aria-hidden size={14} />
-              <input
-                aria-label="Search threads"
-                className={styles.searchInput}
-                placeholder="Search…"
-                type="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-              />
-              <button
-                aria-label={
-                  showArchived ? "Hide archived" : "Show archived"
-                }
-                aria-pressed={showArchived}
-                className={cx(
-                  styles.searchPillBtn,
-                  showArchived && styles.searchPillBtnActive,
-                )}
-                type="button"
-                onClick={() => setShowArchived((v) => !v)}
-              >
-                <Filter size={13} />
-              </button>
+            <div className={styles.topBarRow}>
               <button
                 aria-label="New chat"
-                title="New chat"
-                className={styles.searchPillBtn}
+                className={styles.newChatButton}
                 type="button"
                 onClick={() => onThreadChange(undefined)}
               >
-                <Plus size={14} />
+                New
               </button>
+              <div className={styles.searchUnderline}>
+                <input
+                  aria-label="Search threads"
+                  autoComplete="off"
+                  className={styles.searchUnderlineInput}
+                  placeholder="Search threads…"
+                  type="search"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                />
+              </div>
             </div>
           </div>
 
@@ -383,9 +370,7 @@ export default function ThreadsDrawer({
                 <p className={styles.emptyMessage}>
                   {isSearching
                     ? `No threads match "${searchQuery.trim()}".`
-                    : showArchived
-                      ? "No archived threads."
-                      : "No threads yet. Start a new chat to begin."}
+                    : "No threads yet. Start a new chat to begin."}
                 </p>
                 {isSearching && hasMoreThreads && (
                   <button
