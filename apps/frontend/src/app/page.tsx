@@ -1,29 +1,28 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import {
-  CopilotChatConfigurationProvider,
-  CopilotSidebar,
-  useAgent,
-  useDefaultRenderTool,
-} from "@copilotkit/react-core/v2";
+import { useRouter } from "next/navigation";
+import { useCallback, useEffect, useState } from "react";
 
-import { BillingChartCard } from "@/components/gpilot/BillingChartCard";
-import { Header } from "@/components/gpilot/Header";
-import { ResourceCard } from "@/components/gpilot/ResourceCard";
-import { ToolFallbackCard } from "@/components/copilot/ToolFallbackCard";
-import { ThreadsDrawer } from "@/components/threads-drawer";
-import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
+import { Logo } from "@/components/brand/Logo";
+import { ChatInput } from "@/components/chat/ChatInput";
 import { ThemeProvider } from "@/hooks/use-theme";
-import { mergeAgentState } from "@/lib/gpilot/types";
+
+const SUGGESTIONS = [
+  "Show me last two months of GCP spend",
+  "List my resources",
+  "What's my biggest cost driver?",
+];
+
+const QUEUED_KEY = "gpilot.queuedMessage";
 
 /**
- * gpilot canvas — Phase 3.
+ * Entry point — empty state. Logo + chat input + a few starter chips,
+ * vertically centered. No threads drawer, no canvas, no chat panel.
  *
- * Reads `agent.state` via `useAgent()` and renders a Header + chart +
- * resource grid. The agent's `fetch_billing` / `list_resources` backend
- * tools mutate state through `Command(update={...})`; STATE_SNAPSHOT
- * pushes the change here and React re-renders.
+ * Submit creates a fresh threadId, stashes the typed message in
+ * sessionStorage under `gpilot.queuedMessage`, then navigates to
+ * /c/[threadId]. The chat page picks up the stash on mount, sends it
+ * via the agent, and clears the storage.
  */
 
 function ClientOnly({ children }: { children: React.ReactNode }) {
@@ -33,121 +32,55 @@ function ClientOnly({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-function CanvasInner() {
-  const { agent } = useAgent();
-  const state = useMemo(() => mergeAgentState(agent?.state), [agent?.state]);
+function Entry() {
+  const router = useRouter();
+  const [busy, setBusy] = useState(false);
 
-  // Render every backend tool call inline in the chat — the user can see
-  // exactly what the agent is doing during multi-second MCP cold-starts.
-  // Without this hook, the chat goes silent for 3-5s while gcloud-mcp /
-  // BigQuery MCP boot fresh per call.
-  useDefaultRenderTool({
-    render: ({ name, status, result, args }) => (
-      <ToolFallbackCard
-        name={name}
-        status={String(status ?? "")}
-        result={typeof result === "string" ? result : JSON.stringify(result)}
-        parameters={args}
-      />
-    ),
-  });
-
-  const hasContent =
-    state.billing_periods.length > 0 || state.resources.length > 0;
-
-  return (
-    <>
-      <main className="relative flex h-screen flex-col overflow-hidden bg-background px-6 py-5">
-        <Header header={state.header ?? {}} sync={state.sync ?? {}} />
-
-        <div className="flex-1 overflow-auto pb-6">
-          {hasContent ? (
-            <div className="space-y-6">
-              {state.billing_periods.length > 0 && (
-                <BillingChartCard periods={state.billing_periods} />
-              )}
-
-              {state.resources.length > 0 && (
-                <section>
-                  <h2
-                    className="mb-3 font-mono text-[11px] uppercase tracking-widest"
-                    style={{ color: "var(--muted-foreground)" }}
-                  >
-                    Resources · {state.resources.length}
-                  </h2>
-                  <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                    {state.resources.map((r) => (
-                      <ResourceCard key={r.id} resource={r} />
-                    ))}
-                  </div>
-                </section>
-              )}
-            </div>
-          ) : (
-            <EmptyState />
-          )}
-        </div>
-      </main>
-
-      <CopilotSidebar
-        defaultOpen
-        width={420}
-        header={{ title: "gpilot" }}
-        input={{ disclaimer: () => null, className: "pb-6" }}
-      />
-    </>
+  const handleSubmit = useCallback(
+    (text: string) => {
+      if (busy) return;
+      setBusy(true);
+      const threadId =
+        typeof crypto !== "undefined" && "randomUUID" in crypto
+          ? crypto.randomUUID()
+          : `thread-${Date.now()}`;
+      try {
+        sessionStorage.setItem(QUEUED_KEY, text);
+      } catch {
+        // sessionStorage can fail in strict private modes — degrade
+        // gracefully by passing the message via a query param.
+      }
+      router.push(`/c/${threadId}`);
+    },
+    [busy, router],
   );
-}
 
-function EmptyState() {
   return (
-    <section
-      className="mx-auto mt-12 max-w-xl rounded-2xl border border-dashed p-12 text-center"
-      style={{
-        borderColor: "var(--border)",
-        background: "var(--card)",
-        color: "var(--muted-foreground)",
-      }}
+    <main
+      className="flex min-h-screen items-center justify-center px-6"
+      style={{ background: "var(--background)" }}
     >
-      <p className="text-sm">
-        Empty canvas. Ask the agent to{" "}
-        <span
-          className="font-mono text-xs"
-          style={{ color: "var(--foreground)" }}
+      <div className="flex w-full max-w-xl flex-col items-center gap-8">
+        <div
+          className="text-3xl"
+          style={{
+            color: "var(--foreground)",
+            fontWeight: 600,
+            letterSpacing: "-0.02em",
+          }}
         >
-          show me last two months of GCP spend
-        </span>{" "}
-        or{" "}
-        <span
-          className="font-mono text-xs"
-          style={{ color: "var(--foreground)" }}
-        >
-          list my resources
-        </span>
-        .
-      </p>
-      <p className="mt-3 font-mono text-[11px] uppercase tracking-widest">
-        Phase 3 — billing + resources vertical
-      </p>
-    </section>
-  );
-}
+          <Logo />
+        </div>
 
-function HomePage() {
-  const [threadId, setThreadId] = useState<string | undefined>(undefined);
-  return (
-    <div className={drawerStyles.layout}>
-      <ThreadsDrawer
-        agentId="default"
-        threadId={threadId}
-        onThreadChange={setThreadId}
-      />
-      <div className={drawerStyles.mainPanel}>
-        <CopilotChatConfigurationProvider agentId="default" threadId={threadId}>
-          <CanvasInner />
-        </CopilotChatConfigurationProvider>
+        <ChatInput
+          onSubmit={handleSubmit}
+          busy={busy}
+          autoFocus
+          placeholder="What do you want to do with your cloud?"
+          suggestions={SUGGESTIONS}
+        />
       </div>
-    </div>
+    </main>
   );
 }
 
@@ -155,7 +88,7 @@ export default function Page() {
   return (
     <ThemeProvider>
       <ClientOnly>
-        <HomePage />
+        <Entry />
       </ClientOnly>
     </ThemeProvider>
   );
