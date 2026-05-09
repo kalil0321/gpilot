@@ -1,0 +1,205 @@
+/**
+ * gpilot — minimalist overrides for CopilotKit v2 chat surfaces.
+ *
+ * Loaded after `@copilotkit/react-core/v2/styles.css` so these win.
+ * Goal: kill the bubble/card aesthetic, square everything, no shadows,
+ * no extra colour. Borders, padding, typography do all the work.
+ *
+ * Targets stable hooks CopilotKit publishes:
+ *   data-copilotkit                       outer scope on every chat surface
+ *   data-testid="copilot-user-message"    user bubble container
+ *   data-testid="copilot-assistant-message"   assistant message
+ *   data-testid="copilot-chat-input"      input shell
+ *   .copilotKitInput                      v1-compat alias on the input
+ *   data-testid="copilot-user-toolbar"    user-message edit toolbar
+ *   data-testid="copilot-assistant-toolbar"   assistant copy/regen toolbar
+ */
+
+/* ----------------------------------------------------------------------
+   1. TOKEN SHADOWING
+   Re-route CopilotKit's internal `bg-muted`, `border-border`, `bg-card`
+   etc. to our gpilot tokens (which are mostly the same neutrals, but
+   without the lavender accents creeping in).
+---------------------------------------------------------------------- */
+[data-copilotkit] {
+  --background: var(--background);
+  --foreground: var(--foreground);
+  --card: var(--background);
+  --card-foreground: var(--foreground);
+  --muted: transparent;
+  --muted-foreground: var(--muted-foreground);
+  --border: var(--border);
+  --input: var(--border);
+  --primary: var(--foreground);
+  --primary-foreground: var(--background);
+  --accent: transparent;
+  --accent-foreground: var(--foreground);
+  --radius: 0;
+}
+
+/* ----------------------------------------------------------------------
+   2. USER MESSAGE
+   Strip the bubble. Right-align. Add a single hairline below as
+   a separator from the next assistant turn.
+---------------------------------------------------------------------- */
+[data-testid="copilot-user-message"] [class*="bg-muted"] {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 0 !important;
+  padding: 0 !important;
+  max-width: 100% !important;
+  font-size: 0.92rem !important;
+  line-height: 1.55 !important;
+  color: var(--foreground) !important;
+  text-align: right;
+}
+
+[data-testid="copilot-user-message"] {
+  margin: 1.25rem 0 !important;
+  padding-bottom: 1rem;
+  border-bottom: 1px solid var(--border);
+}
+
+/* user-toolbar (edit/copy buttons): downplay */
+[data-testid="copilot-user-toolbar"] {
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+[data-testid="copilot-user-message"]:hover [data-testid="copilot-user-toolbar"] {
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------------------
+   3. ASSISTANT MESSAGE
+   Just plain prose, tighter line-height, smaller code blocks.
+---------------------------------------------------------------------- */
+[data-testid="copilot-assistant-message"] {
+  margin: 1rem 0 !important;
+  font-size: 0.92rem;
+  line-height: 1.6;
+  color: var(--foreground);
+}
+
+/* assistant prose — kill the rounded code blocks, keep just monospace */
+[data-testid="copilot-assistant-message"] pre,
+[data-testid="copilot-assistant-message"] code {
+  background: var(--muted) !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--border) !important;
+  font-size: 0.82em !important;
+}
+
+[data-testid="copilot-assistant-toolbar"] {
+  opacity: 0.55;
+  transition: opacity 120ms;
+}
+[data-testid="copilot-assistant-message"]:hover [data-testid="copilot-assistant-toolbar"] {
+  opacity: 1;
+}
+
+/* ----------------------------------------------------------------------
+   4. INPUT
+   Square corners, single hairline border, no shadow, no fill.
+---------------------------------------------------------------------- */
+[data-testid="copilot-chat-input"],
+.copilotKitInput {
+  background: var(--background) !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 6px !important;
+  box-shadow: none !important;
+  transition: border-color 120ms;
+}
+
+[data-testid="copilot-chat-input"]:focus-within,
+.copilotKitInput:focus-within {
+  border-color: var(--foreground) !important;
+}
+
+/* textarea — tighter typography, no inner shadow */
+[data-testid="copilot-chat-input"] textarea {
+  font-size: 0.92rem !important;
+  line-height: 1.5 !important;
+  color: var(--foreground) !important;
+  background: transparent !important;
+}
+
+[data-testid="copilot-chat-input"] textarea::placeholder {
+  color: var(--muted-foreground) !important;
+  opacity: 0.6;
+}
+
+/* ----------------------------------------------------------------------
+   5. INPUT BUTTONS — minimal icons, no fill
+---------------------------------------------------------------------- */
+[data-testid="copilot-chat-input"] button {
+  background: transparent !important;
+  border-radius: 4px !important;
+  color: var(--foreground) !important;
+  box-shadow: none !important;
+  transition: opacity 120ms;
+}
+
+[data-testid="copilot-chat-input"] button[disabled] {
+  opacity: 0.35 !important;
+}
+
+/* Send / stop button — no filled circle, just an icon */
+[data-testid="copilot-chat-input"] button[type="submit"],
+[data-testid="copilot-chat-input"] [data-testid*="send"],
+[data-testid="copilot-chat-input"] [data-testid*="stop"] {
+  background: transparent !important;
+  color: var(--foreground) !important;
+  width: 32px !important;
+  height: 32px !important;
+}
+
+/* ----------------------------------------------------------------------
+   6. CHROME WE DON'T NEED
+   Hide CopilotKit's brand banner, intelligence pill, license warnings.
+   The kit's own header (gpilot wordmark in threads sidebar) is enough.
+---------------------------------------------------------------------- */
+.cpk-intelligence-pill {
+  display: none !important;
+}
+
+/* CopilotKit's modal header (often shows brand name); kill it */
+[data-copilotkit] [class*="ModalHeader"],
+[data-copilotkit] header[class*="cpk:"] {
+  border-bottom: 1px solid var(--border) !important;
+  background: transparent !important;
+  padding: 0.75rem 1rem !important;
+}
+
+/* In-chat license warning banner */
+[class*="license-warning"],
+[class*="LicenseWarning"] {
+  border-radius: 4px !important;
+  background: var(--muted) !important;
+  border: 1px solid var(--border) !important;
+  font-size: 0.78rem !important;
+}
+
+/* ----------------------------------------------------------------------
+   7. SUGGESTION PILLS — simple text chips, no fill
+---------------------------------------------------------------------- */
+[class*="SuggestionPill"],
+[data-testid*="suggestion-pill"] {
+  background: transparent !important;
+  border: 1px solid var(--border) !important;
+  border-radius: 4px !important;
+  font-size: 0.82rem !important;
+  padding: 0.35rem 0.7rem !important;
+  color: var(--foreground) !important;
+}
+
+[class*="SuggestionPill"]:hover,
+[data-testid*="suggestion-pill"]:hover {
+  background: var(--muted) !important;
+}
+
+/* ----------------------------------------------------------------------
+   8. SCROLL CONTAINER — generous side padding for breathing room
+---------------------------------------------------------------------- */
+[data-sidebar-chat] [data-copilotkit] {
+  font-feature-settings: "ss01", "cv11";
+}

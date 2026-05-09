@@ -8,6 +8,10 @@ import "./globals.css";
 // collide with v2's same-name selectors (different DOM, different positioning)
 // and break the sidebar layout when both are loaded.
 import "@copilotkit/react-core/v2/styles.css";
+// gpilot-specific overrides — minimalist chat: hairline borders, square
+// edges, no shadows, no extra colour. Loaded LAST so it wins over the
+// CopilotKit defaults above.
+import "./copilot-overrides.css";
 
 const jakarta = Plus_Jakarta_Sans({
   subsets: ["latin"],
