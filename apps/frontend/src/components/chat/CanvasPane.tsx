@@ -112,42 +112,60 @@ export function CanvasPane({ open, width, onResize }: CanvasPaneProps) {
         ) : null}
       </header>
 
-      <div className="flex-1 px-5 py-3">
-        {hasContent ? (
-          <div className="space-y-5">
-            {state.billing_periods.length > 0 ? (
-              <BillingChartCard periods={state.billing_periods} />
-            ) : null}
+      {hasContent ? (
+        <div className="flex-1 space-y-5 px-5 py-3">
+          {state.billing_periods.length > 0 ? (
+            <BillingChartCard periods={state.billing_periods} />
+          ) : null}
 
-            {state.resources.length > 0 ? (
-              <section>
-                <h3
-                  className="mb-2 font-mono text-[10px] uppercase tracking-widest"
-                  style={{ color: "var(--muted-foreground)" }}
-                >
-                  resources · {state.resources.length}
-                </h3>
-                <div className="grid gap-3">
-                  {state.resources.map((r) => (
-                    <ResourceCard key={r.id} resource={r} />
-                  ))}
-                </div>
-              </section>
-            ) : null}
-          </div>
-        ) : (
-          <div
-            className="flex h-full items-center justify-center text-center text-[12px]"
-            style={{ color: "var(--muted-foreground)" }}
-          >
-            <p>
-              The canvas paints here when the agent
-              <br />
-              fetches billing or lists resources.
-            </p>
-          </div>
-        )}
-      </div>
+          {state.resources.length > 0 ? (
+            <section>
+              <h3
+                className="mb-2 font-mono text-[10px] uppercase tracking-widest"
+                style={{ color: "var(--muted-foreground)" }}
+              >
+                resources · {state.resources.length}
+              </h3>
+              <div className="grid gap-3">
+                {state.resources.map((r) => (
+                  <ResourceCard key={r.id} resource={r} />
+                ))}
+              </div>
+            </section>
+          ) : null}
+        </div>
+      ) : (
+        <EmptyDotGrid />
+      )}
     </aside>
   );
 }
+
+/**
+ * React-Flow-style empty canvas — radial-gradient dot grid filling
+ * the available area. The dots use --border so the pattern reads as
+ * "structure, not content"; subtle in light mode, subtle in dark.
+ *
+ * No actual React Flow dependency: just CSS.
+ */
+function EmptyDotGrid() {
+  return (
+    <div
+      className="relative flex flex-1 items-center justify-center"
+      style={{
+        backgroundImage:
+          "radial-gradient(circle at 1px 1px, var(--border) 1px, transparent 0)",
+        backgroundSize: "16px 16px",
+        backgroundPosition: "0 0",
+      }}
+    >
+      <span
+        className="font-mono text-[10px] uppercase tracking-widest"
+        style={{ color: "var(--muted-foreground)" }}
+      >
+        canvas idle
+      </span>
+    </div>
+  );
+}
+
