@@ -1,31 +1,31 @@
 """Typed wrappers + response normalization on top of `gcp_mcp.py`.
 
-`gcp_mcp` returns whatever shape the MCP server emits (structured content
-or parsed JSON text blocks). This layer normalizes those into the
-canonical canvas shapes the agent + frontend expect:
+The official gcloud-mcp exposes a single `run_gcloud_command` tool — we
+build typed callers (fetch_billing, fetch_run_services, ...) on top of
+it by composing CLI invocations and parsing JSON output.
+
+Canonical canvas shapes:
 
 - BillingPeriod = {"month", "service", "cost_usd"}
 - GCPResource   = {"id", "type", "name", "region"?, "status"?,
                    "cost_usd_mtd"?, "metadata"?, "last_updated"?}
 
-When the MCP path raises `NotConfiguredError`, callers handle the
-fallback to seeded JSON via `gcp_store`. This module purposefully does
-NOT decide between live vs seed — that's `gcp_store`'s job.
+When a path raises `NotConfiguredError` (e.g. ADC unset, or BigQuery
+MCP unset), the caller in `gcp_store` falls through to seeded JSON.
 """
 
 from __future__ import annotations
 
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from . import gcp_mcp
 
 
-# --- Billing ------------------------------------------------------------
+# --- Billing (BigQuery MCP) ---------------------------------------------
 
-# Generated against `gcp_billing_export_v1` schema. The standard daily
+# Canonical query against `gcp_billing_export_v1_*`. The standard daily
 # detailed export has `usage_start_time`, `service.description`, `cost`.
-# Our canonical shape collapses to month + service + cost — sufficient
-# for the chart and small enough to keep state snappy.
+# We collapse to month + service + cost — sufficient for the chart.
 _BILLING_SQL = """
 SELECT
   FORMAT_TIMESTAMP('%Y-%m', usage_start_time) AS month,
@@ -39,69 +39,140 @@ ORDER BY month, cost_usd DESC
 
 
 def fetch_billing(months: int, dataset: str) -> List[Dict[str, Any]]:
-    """Run the canonical billing query and normalize rows.
+    """Run the canonical billing query via the BigQuery MCP, normalize.
 
     Args:
         months: Window size in months (e.g. 2 → last two months).
         dataset: Fully-qualified dataset id, e.g. "<project>.billing_export".
 
-    Returns: list[BillingPeriod]. Empty list if MCP returns no rows.
-    Raises NotConfiguredError when BIGQUERY_MCP_URL is unset.
+    Returns: list[BillingPeriod]. Empty list when the MCP returns no rows.
+    Raises NotConfiguredError when BIGQUERY_MCP_COMMAND is unset.
     """
     sql = _BILLING_SQL.format(dataset=dataset, months=months)
     raw = gcp_mcp.bq_query(sql)
-    rows = raw.get("rows") or []
+    rows = _extract_rows(raw)
+
     out: List[Dict[str, Any]] = []
     for row in rows:
-        # The MCP may return rows as plain dicts or as Google's "f/v"
-        # field-array shape — handle both.
         if isinstance(row, dict) and {"month", "service", "cost_usd"} <= row.keys():
-            out.append({
-                "month": str(row["month"]),
-                "service": str(row["service"]),
-                "cost_usd": float(row["cost_usd"]),
-            })
+            out.append(
+                {
+                    "month": str(row["month"]),
+                    "service": str(row["service"]),
+                    "cost_usd": float(row["cost_usd"]),
+                }
+            )
         elif isinstance(row, dict) and "f" in row:
-            # Google's typed response: row["f"] = [{"v": ...}, ...]
+            # Google's typed shape: row["f"] = [{"v": ...}, ...]
             fields = [f.get("v") for f in row["f"]]
             if len(fields) >= 3:
-                out.append({
-                    "month": str(fields[0]),
-                    "service": str(fields[1]),
-                    "cost_usd": float(fields[2]),
-                })
+                out.append(
+                    {
+                        "month": str(fields[0]),
+                        "service": str(fields[1]),
+                        "cost_usd": float(fields[2]),
+                    }
+                )
     return out
 
 
-# --- Resources (Cloud Run, BigQuery datasets, GCS buckets) --------------
+def _extract_rows(raw: Any) -> List[Dict[str, Any]]:
+    """BigQuery MCPs vary in their response wrapping. Try the common ones."""
+    if isinstance(raw, list):
+        return raw
+    if isinstance(raw, dict):
+        for key in ("rows", "results", "data"):
+            v = raw.get(key)
+            if isinstance(v, list):
+                return v
+    return []
+
+
+# --- Cloud Run (gcloud MCP) ---------------------------------------------
 
 def fetch_run_services(project_id: str) -> List[Dict[str, Any]]:
-    """Normalize the gcloud MCP's `run.services.list` response.
+    """List Cloud Run services across all regions, normalize to GCPResource.
 
-    Each service is mapped to a canonical GCPResource dict so it slots
-    straight into `state.resources` without further massaging.
+    Composed via the gcloud MCP's `run_gcloud_command`. We pass
+    `--platform=managed --format=json` and rely on gcloud's JSON output
+    being self-describing.
     """
-    raw = gcp_mcp.run_list(project_id=project_id)
-    services = raw.get("services") or raw.get("items") or []
+    raw = gcp_mcp.gcloud_run(
+        f"run services list --platform=managed --format=json --project={project_id}"
+    )
+    services = raw if isinstance(raw, list) else []
+
     out: List[Dict[str, Any]] = []
     for svc in services:
-        name = svc.get("name") or svc.get("metadata", {}).get("name", "")
-        region = svc.get("region") or svc.get("metadata", {}).get("region", "")
+        # gcloud's services-list response shape:
+        # { "metadata": {"name", "namespace", "labels", "annotations", ...},
+        #   "spec": {...},
+        #   "status": {"url", "latestReadyRevisionName", "conditions"[...]},
+        # }
+        meta = svc.get("metadata") or {}
+        status = svc.get("status") or {}
+        name = meta.get("name") or ""
         if not name:
             continue
-        out.append({
-            "id": f"service:{region or 'global'}/{name}",
-            "type": "service",
-            "name": name,
-            "region": region,
-            "status": svc.get("status") or "live",
-            "cost_usd_mtd": float(svc.get("cost_usd_mtd") or 0.0),
-            "metadata": {
-                "platform": "Cloud Run",
-                "url": svc.get("url") or svc.get("status_url"),
-                "revision": svc.get("latest_revision"),
-                "image": svc.get("image"),
-            },
-            "last_updated": svc.get("last_modified") or svc.get("update_time"),
-        })
+        # Region lives in metadata.labels.cloud.googleapis.com/location
+        labels = meta.get("labels") or {}
+        region = (
+            labels.get("cloud.googleapis.com/location")
+            or meta.get("namespace")
+            or "unknown"
+        )
+        # Healthy = top-of-conditions has type=Ready, status=True
+        conditions = status.get("conditions") or []
+        ready = next((c for c in conditions if c.get("type") == "Ready"), None)
+        is_live = bool(ready and ready.get("status") == "True")
+
+        # Latest image — pluck from spec.template.spec.containers[0].image
+        spec = (svc.get("spec") or {}).get("template", {}).get("spec", {})
+        containers = spec.get("containers") or []
+        image = containers[0].get("image") if containers else None
+
+        out.append(
+            {
+                "id": f"service:{region}/{name}",
+                "type": "service",
+                "name": name,
+                "region": region,
+                "status": "live" if is_live else "degraded",
+                "cost_usd_mtd": 0.0,  # gcloud doesn't surface this; left to billing rollup
+                "metadata": {
+                    "platform": "Cloud Run",
+                    "url": status.get("url"),
+                    "revision": status.get("latestReadyRevisionName"),
+                    "image": image,
+                },
+                "last_updated": meta.get("creationTimestamp"),
+            }
+        )
     return out
+
+
+# --- Project + utility wrappers -----------------------------------------
+
+def fetch_project_info(project_id: str) -> Optional[Dict[str, Any]]:
+    """Return project metadata as a GCPResource of type 'project', or None."""
+    try:
+        raw = gcp_mcp.gcloud_run(
+            f"projects describe {project_id} --format=json"
+        )
+    except gcp_mcp.NotConfiguredError:
+        return None
+    if not isinstance(raw, dict):
+        return None
+
+    return {
+        "id": f"project:{project_id}",
+        "type": "project",
+        "name": raw.get("name") or project_id,
+        "status": raw.get("lifecycleState", "ACTIVE").lower(),
+        "metadata": {
+            "platform": "GCP Project",
+            "project_number": raw.get("projectNumber"),
+            "create_time": raw.get("createTime"),
+        },
+        "last_updated": raw.get("createTime"),
+    }

@@ -85,7 +85,7 @@ class GCPStore:
             return self._seed.billing_periods(months)
         try:
             rows = gcp_integration.fetch_billing(months=months, dataset=self._dataset)
-        except gcp_mcp.NotConfiguredError:
+        except (gcp_mcp.NotConfiguredError, Exception):  # noqa: BLE001
             return self._seed.billing_periods(months)
         return rows or self._seed.billing_periods(months)
 
@@ -94,13 +94,20 @@ class GCPStore:
             return self._seed.resources()
         try:
             services = gcp_integration.fetch_run_services(project_id=self._project_id)
-        except gcp_mcp.NotConfiguredError:
+            project = gcp_integration.fetch_project_info(self._project_id)
+        except (gcp_mcp.NotConfiguredError, Exception):  # noqa: BLE001
             return self._seed.resources()
-        # Live Cloud Run + seeded buckets/datasets — the gcloud MCP only
-        # covers compute resources; storage/dataset entries stay seeded
-        # until we wire dedicated MCPs for those.
-        non_service_seeds = [r for r in self._seed.resources() if r.get("type") != "service"]
-        return services + non_service_seeds
+        # Live Cloud Run + project info; storage/dataset entries stay
+        # seeded until we wire dedicated MCPs for those.
+        non_compute_seeds = [
+            r for r in self._seed.resources() if r.get("type") not in {"service", "project"}
+        ]
+        out: List[Dict[str, Any]] = []
+        if project:
+            out.append(project)
+        out.extend(services)
+        out.extend(non_compute_seeds)
+        return out
 
     def source_label(self) -> str:
         bq = gcp_mcp.has_bigquery()
@@ -133,10 +140,15 @@ def get_store() -> Store:
         return _singleton
 
     project = os.getenv("GCP_PROJECT_ID", "").strip()
-    dataset = os.getenv("GCP_BILLING_DATASET", "billing_export").strip()
-    has_any_mcp = gcp_mcp.has_bigquery() or gcp_mcp.has_gcloud()
+    dataset_env = os.getenv("GCP_BILLING_DATASET", "billing_export").strip()
+    # If the user gave a bare dataset id, qualify it with the project.
+    if project and "." not in dataset_env:
+        dataset = f"{project}.{dataset_env}"
+    else:
+        dataset = dataset_env
+    has_any_live = gcp_mcp.has_bigquery() or gcp_mcp.has_gcloud()
 
-    if project and has_any_mcp:
+    if project and has_any_live:
         _singleton = GCPStore(project_id=project, dataset=dataset)
     else:
         _singleton = SeedStore()
