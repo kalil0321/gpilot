@@ -94,25 +94,51 @@ def _sandbox_meta(entry: sandbox_mgr._CacheEntry) -> Dict[str, Any]:
     }
 
 
+def _ambient_env() -> Dict[str, str]:
+    """Env vars to inject into every sandbox shell exec.
+
+    GITHUB_TOKEN: required for git push to private/public repos AND
+                  for `gh` CLI auth. We export it as both names because
+                  some tools read GITHUB_TOKEN, gh CLI prefers GH_TOKEN
+                  (and falls back to GITHUB_TOKEN), and git's HTTPS
+                  helper looks at GIT_ASKPASS — so we expose it
+                  redundantly to cover all paths.
+    """
+    out: Dict[str, str] = {}
+    gh_token = os.getenv("GITHUB_TOKEN", "").strip()
+    if gh_token:
+        out["GITHUB_TOKEN"] = gh_token
+        out["GH_TOKEN"] = gh_token
+    return out
+
+
 def _run_in_sandbox(
     entry: sandbox_mgr._CacheEntry,
     command: str,
     cwd: Optional[str],
     timeout: int,
+    env: Optional[Dict[str, str]] = None,
 ) -> Dict[str, Any]:
     """Run a shell command in the sandbox, normalize the response.
 
     Daytona SDK shape we target (0.18+):
-      sandbox.process.<run-method>(command, cwd=..., timeout=...) →
+      sandbox.process.<run-method>(command, cwd=..., env=..., timeout=...) →
         ExecutionResponse with .exit_code, .result
     Older shapes that exposed the same method on the sandbox itself are
     used as a last-resort fallback.
+
+    The ambient env (GITHUB_TOKEN, GH_TOKEN — see `_ambient_env`) is
+    merged on EVERY call so git push and `gh` CLI are auth'd
+    automatically without the agent having to thread credentials
+    through.
     """
     sb = entry.sandbox
     started = time.time()
     exit_code = -1
     stdout = ""
     stderr = ""
+
+    merged_env = {**_ambient_env(), **(env or {})}
 
     process = getattr(sb, "process", None)
     runner = getattr(process, _RUN_METHOD, None) if process is not None else None
@@ -122,12 +148,14 @@ def _run_in_sandbox(
             kwargs: Dict[str, Any] = {"command": command}
             if cwd:
                 kwargs["cwd"] = cwd
+            if merged_env:
+                kwargs["env"] = merged_env
             if timeout:
                 kwargs["timeout"] = timeout
             resp = runner(**kwargs)
         except TypeError:
-            # Some SDK shapes take (command, cwd, timeout) positionally.
-            resp = runner(command, cwd or entry.workspace, timeout)
+            # Some SDK shapes take (command, cwd, env, timeout) positionally.
+            resp = runner(command, cwd or entry.workspace, merged_env or None, timeout)
     else:
         # Last-resort: SDK exposes the method directly on the sandbox.
         fallback = getattr(sb, _RUN_METHOD, None)
@@ -642,6 +670,188 @@ def sandbox_expose(
     )
 
 
+@tool
+def sandbox_github_setup(
+    state: Annotated[Any, InjectedState] = None,
+    config: RunnableConfig = None,  # type: ignore[assignment]
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> Command:
+    """Bootstrap GitHub-related tooling inside the per-thread sandbox.
+
+    Idempotent — call it whenever you need git/gh to "just work" in
+    the sandbox. Concretely it:
+      - sets `git config --global user.email/name` so commits don't
+        fail with "Author identity unknown"
+      - installs the `gh` CLI if missing (apt-get on Ubuntu-based
+        snapshots, ~10-30s first time)
+      - GitHub auth itself is already in place: GITHUB_TOKEN /
+        GH_TOKEN are auto-exported into every sandbox_shell invocation
+        from the agent's env
+
+    Use this BEFORE the first `gh` command or first `git commit` /
+    `git push` of a session.
+    """
+    thread_id = _thread_id_from_config(config)
+    try:
+        entry = sandbox_mgr.get_or_create_sandbox(thread_id)
+    except sandbox_mgr.SandboxNotConfiguredError as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(content=str(e), tool_call_id=tool_call_id)
+                ],
+            }
+        )
+
+    # One bash one-liner so it's atomic and `set -e` fails fast.
+    bootstrap = (
+        "set -e; "
+        "git config --global user.email 'agent@gpilot.dev'; "
+        "git config --global user.name 'gpilot agent'; "
+        "git config --global init.defaultBranch main; "
+        # Install gh only if missing. apt-get is silent (-qq) and
+        # auto-yes (-y). We try sudo first, fall back to bare apt-get
+        # because Daytona snapshots vary on whether the default user
+        # has passwordless sudo.
+        "if ! command -v gh >/dev/null 2>&1; then "
+        "  (sudo apt-get update -qq && sudo apt-get install -y gh) "
+        "  || (apt-get update -qq && apt-get install -y gh) "
+        "  || { echo 'gh install failed' >&2; exit 1; }; "
+        "fi; "
+        "gh --version | head -1"
+    )
+
+    try:
+        result = _run_in_sandbox(entry, bootstrap, cwd=None, timeout=180)
+    except Exception as e:  # noqa: BLE001
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"sandbox_github_setup failed: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ],
+            }
+        )
+
+    if result["exit_code"] != 0:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=(
+                            f"sandbox_github_setup exited {result['exit_code']}: "
+                            f"{(result['stderr'] or result['stdout'])[:600]}"
+                        ),
+                        tool_call_id=tool_call_id,
+                    )
+                ],
+            }
+        )
+
+    summary = (
+        f"GitHub tooling ready in sandbox: {result['stdout'].strip().splitlines()[-1]}"
+        if result["stdout"]
+        else "GitHub tooling ready in sandbox."
+    )
+    return Command(
+        update={
+            "sandbox": _sandbox_meta(entry),
+            "sync": {"source": "daytona", "syncedAt": _now_iso()},
+            "messages": [
+                ToolMessage(content=summary, tool_call_id=tool_call_id)
+            ],
+        }
+    )
+
+
+@tool
+def sandbox_gh(
+    args: Annotated[
+        str,
+        "Arguments to pass to the `gh` CLI (everything AFTER the leading "
+        "'gh '). Examples: 'pr create --title \"...\" --body \"...\"', "
+        "'repo create owner/name --public --source=. --remote=origin --push', "
+        "'pr list --state=open --limit=5'. The CLI is auth'd via GH_TOKEN "
+        "automatically; do NOT include `gh auth login` here.",
+    ],
+    cwd: Annotated[
+        Optional[str],
+        "Working directory inside the sandbox. For repo-scoped commands "
+        "(pr create, push, etc.), point this at the cloned repo's path.",
+    ] = None,
+    state: Annotated[Any, InjectedState] = None,
+    config: RunnableConfig = None,  # type: ignore[assignment]
+    tool_call_id: Annotated[str, InjectedToolCallId] = "",
+) -> Command:
+    """Run any `gh` CLI command inside the per-thread sandbox.
+
+    Use for: PR creation, repo creation, PR review/merge, issue
+    management, gist creation. The CLI auths via $GH_TOKEN which we
+    inject from the agent's env on every call. Output (stdout +
+    stderr) is appended to the canvas's terminal log AND returned as
+    a tool message so you can reason over it.
+
+    Call `sandbox_github_setup` first if you haven't yet — it
+    installs the gh CLI on a fresh sandbox.
+    """
+    thread_id = _thread_id_from_config(config)
+    try:
+        entry = sandbox_mgr.get_or_create_sandbox(thread_id)
+    except sandbox_mgr.SandboxNotConfiguredError as e:
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(content=str(e), tool_call_id=tool_call_id)
+                ],
+            }
+        )
+
+    cmd = f"gh {args.strip()}"
+    try:
+        result = _run_in_sandbox(entry, cmd, cwd=cwd, timeout=120)
+    except Exception as e:  # noqa: BLE001
+        return Command(
+            update={
+                "messages": [
+                    ToolMessage(
+                        content=f"sandbox_gh failed: {e}",
+                        tool_call_id=tool_call_id,
+                    )
+                ],
+            }
+        )
+
+    log_entry = {
+        "id": str(uuid.uuid4()),
+        "command": cmd,
+        "cwd": result["cwd"],
+        "stdout": _truncate(result["stdout"], 4_000),
+        "stderr": _truncate(result["stderr"], 4_000),
+        "exit_code": result["exit_code"],
+        "duration_ms": result["duration_ms"],
+        "ts": _now_iso(),
+    }
+    new_log = _existing_terminal_log(state) + [log_entry]
+
+    body = result["stdout"] or result["stderr"]
+    headline = f"$ {cmd}  → exit {result['exit_code']} ({result['duration_ms']}ms)"
+    chat_text = (
+        f"{headline}\n\n{_truncate(body, 2_000)}" if body else headline
+    )
+    return Command(
+        update={
+            "sandbox": _sandbox_meta(entry),
+            "terminal_log": new_log,
+            "sync": {"source": "daytona", "syncedAt": _now_iso()},
+            "messages": [
+                ToolMessage(content=chat_text, tool_call_id=tool_call_id)
+            ],
+        }
+    )
+
+
 def load_sandbox_tools() -> list:
     """Return the @tool list to merge into the agent's tool surface."""
     return [
@@ -651,4 +861,6 @@ def load_sandbox_tools() -> list:
         sandbox_read_file,
         sandbox_git_clone,
         sandbox_expose,
+        sandbox_github_setup,
+        sandbox_gh,
     ]

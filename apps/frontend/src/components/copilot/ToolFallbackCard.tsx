@@ -103,6 +103,16 @@ const TOOL_PHRASES: Record<string, ToolPhrase> = {
     done: "Port is live.",
     failed: "Couldn't expose the port.",
   },
+  sandbox_github_setup: {
+    running: "Setting up GitHub in the sandbox…",
+    done: "GitHub tooling ready.",
+    failed: "GitHub setup failed.",
+  },
+  sandbox_gh: {
+    running: "Running gh…",
+    done: "Ran gh.",
+    failed: "gh command failed.",
+  },
 };
 
 // Tools that should NEVER show a status row in chat. The canvas is
@@ -157,6 +167,7 @@ function parseArgs(raw: unknown): Record<string, unknown> | null {
     "branch",
     "dest",
     "content",
+    "args",
   ];
   for (const key of stringKeys) {
     // Match `"<key>": "<value>` where value runs up to the next
@@ -231,6 +242,10 @@ function commandFor(name: string, args: Record<string, unknown> | null): string 
         return `expose :${port}`;
       }
       return null;
+    }
+    case "sandbox_gh": {
+      const a = typeof args.args === "string" ? args.args : "";
+      return a ? `gh ${clip(a)}` : null;
     }
     case "deploy_hello": {
       const name = typeof args.name === "string" ? args.name : "hello-gpilot";

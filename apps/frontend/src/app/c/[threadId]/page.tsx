@@ -73,6 +73,9 @@ function isUnusableThreadError(err: unknown): boolean {
   return false;
 }
 
+/** Tooltip fragment — avoids SSR mismatch (no `navigator` on server). */
+const CANVAS_TOGGLE_KB_HINT = "Ctrl+\\ / ⌘\\";
+
 function ChatColumn({
   busy,
   connecting,
@@ -100,10 +103,18 @@ function ChatColumn({
           <button
             type="button"
             onClick={onToggleCanvas}
-            aria-label={canvasOpen ? "Hide canvas" : "Show canvas"}
+            aria-label={
+              canvasOpen
+                ? `Hide canvas (${CANVAS_TOGGLE_KB_HINT})`
+                : `Show canvas (${CANVAS_TOGGLE_KB_HINT})`
+            }
             className="hidden h-8 items-center gap-1.5 rounded-md px-2 font-mono text-[10px] uppercase tracking-widest transition-colors hover:bg-muted xl:inline-flex"
             style={{ color: "var(--muted-foreground)" }}
-            title={canvasOpen ? "Hide canvas" : "Show canvas"}
+            title={
+              canvasOpen
+                ? `Hide canvas · ${CANVAS_TOGGLE_KB_HINT}`
+                : `Show canvas · ${CANVAS_TOGGLE_KB_HINT}`
+            }
           >
             <span>canvas</span>
             {canvasOpen ? (
@@ -427,16 +438,30 @@ function ChatLayout() {
   // Cmd+B (Ctrl+B on win/linux) toggles the threads drawer — same
   // shortcut Cursor / VS Code use. We swallow the keystroke so the
   // browser's default "favourites bar" toggle doesn't fire.
+  //
+  // Cmd/Ctrl + \ toggles the canvas (physical Backslash key —
+  // `IntlBackslash` on ISO layouts). Same chord many editors use for
+  // split view; avoids Cmd+Shift+C which opens DevTools in Chrome.
   useEffect(() => {
     const onKeyDown = (e: KeyboardEvent) => {
+      const mod = e.metaKey || e.ctrlKey;
       const isCmdB =
-        (e.metaKey || e.ctrlKey) &&
+        mod && !e.shiftKey && !e.altKey && e.key.toLowerCase() === "b";
+      const isCanvasToggle =
+        mod &&
         !e.shiftKey &&
         !e.altKey &&
-        e.key.toLowerCase() === "b";
-      if (!isCmdB) return;
-      e.preventDefault();
-      setDrawerOpen((v) => !v);
+        (e.code === "Backslash" || e.code === "IntlBackslash");
+
+      if (isCmdB) {
+        e.preventDefault();
+        setDrawerOpen((v) => !v);
+        return;
+      }
+      if (isCanvasToggle) {
+        e.preventDefault();
+        setCanvasOpen((v) => !v);
+      }
     };
     window.addEventListener("keydown", onKeyDown);
     return () => window.removeEventListener("keydown", onKeyDown);
