@@ -70,7 +70,7 @@ export function ToolFallbackCard({ name, status }: ToolFallbackCardProps) {
 
   return (
     <div
-      className="my-1.5 inline-flex items-center gap-2 text-[12.5px] leading-relaxed"
+      className="my-0.5 inline-flex items-center gap-2 text-[12.5px] leading-relaxed"
       style={{
         color: isFailed ? "var(--destructive)" : "var(--muted-foreground)",
       }}

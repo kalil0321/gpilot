@@ -67,7 +67,7 @@ export function ChatMessages() {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto px-6 py-6"
+      className="flex-1 overflow-y-auto px-4 py-3"
       style={{ scrollBehavior: "smooth" }}
     >
       <div className="mx-auto flex max-w-3xl flex-col">
@@ -121,11 +121,11 @@ function UserBubble({
 }) {
   return (
     <div
-      className="self-end max-w-[85%] py-4"
       style={{
         borderTop: isFirst ? undefined : "1px solid var(--border)",
-        marginTop: isFirst ? undefined : "0.75rem",
-        paddingTop: isFirst ? "0.75rem" : "1.5rem",
+        marginTop: isFirst ? undefined : "0.5rem",
+        paddingTop: isFirst ? "0.25rem" : "0.75rem",
+        paddingBottom: "0.25rem",
         width: "100%",
       }}
     >
@@ -153,7 +153,7 @@ function AssistantBubble({
   if (!hasContent && !hasCalls) return null;
 
   return (
-    <div className="self-start max-w-[90%] py-3">
+    <div className="self-start max-w-[90%] pb-2 pt-1">
       {/* tool_calls rendered first as inline status rows */}
       {toolCalls.map((tc) => {
         const result = toolResultByCallId.get(tc.id);

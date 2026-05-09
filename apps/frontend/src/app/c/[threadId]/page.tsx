@@ -143,7 +143,7 @@ function ChatColumn({
 
       <ChatMessages />
 
-      <div className="px-6 pt-2 pb-4">
+      <div className="px-4 pb-3 pt-1">
         <div className="mx-auto max-w-3xl">
           <ChatInput onSubmit={sendMessage} busy={busy} autoFocus />
         </div>
