@@ -1,35 +1,36 @@
 """mcp-use clients for the official gcloud-mcp + an optional BigQuery MCP.
 
-Two MCP servers, both spawned over stdio (the supported launch mode for
-Google's official gcloud-mcp and the community BigQuery MCPs):
+**Persistent-session model (perf):** each MCP server type gets one
+long-lived worker thread that owns its asyncio event loop and a single
+mcp-use session. Calls dispatch via a thread-safe queue and return
+through `concurrent.futures.Future`. The MCP subprocess (e.g. `npx -y
+@google-cloud/gcloud-mcp`) boots once, on the first call, and stays
+warm for the lifetime of the agent process.
 
-- **gcloud**     `npx -y @google-cloud/gcloud-mcp` — single tool
-                 `run_gcloud_command(command)` that passes a string to
-                 the gcloud CLI. Auth via Application Default Credentials
-                 (`gcloud auth application-default login`). Used for
-                 Cloud Run inventory, project info, IAM, etc.
+Cold-start cost (first call after agent boot) ≈ 2-3s.
+Warm cost (subsequent calls)                  ≈ 100-300ms.
 
-- **bigquery**   any community BQ MCP (e.g. `mcp-bigquery-server`,
-                 `googleapis/mcp-toolbox`). Spawn command is configured
-                 via the `BIGQUERY_MCP_COMMAND` env var; unset → no live
-                 BigQuery and `gcp_store` falls through to seed for
-                 billing rollups.
+When `langgraph dev` reloads the module, the workers die with the old
+process. The next call lazily spins up a new worker.
 
-The async-from-sync trampoline + payload normalization are cribbed
-verbatim from the deleted notion_mcp.py — they handle `langgraph dev`'s
-sync-on-async tool execution path and the two MCP response shapes
-(structuredContent vs text-block JSON).
+ENDPOINT CONFIG via env (all optional; unset → seed-only mode):
+- GCLOUD_MCP_COMMAND   override for the gcloud-mcp launch command
+                       (default `npx -y @google-cloud/gcloud-mcp`).
+- BIGQUERY_MCP_COMMAND launch command for a community BigQuery MCP
+                       (e.g. `npx -y @ergut/mcp-bigquery-server …`).
 """
 
 from __future__ import annotations
 
 import asyncio
+import concurrent.futures
 import json
 import os
+import queue
 import shutil
 import threading
 from pathlib import Path
-from typing import Any, Dict, List, Optional
+from typing import Any, Callable, Dict, List, Optional
 
 from dotenv import load_dotenv
 
@@ -41,33 +42,34 @@ load_dotenv()
 # tarball, or swap in a fork.
 _DEFAULT_GCLOUD_MCP_CMD = "npx -y @google-cloud/gcloud-mcp"
 
+# How long to wait for the worker's first session to become ready
+# before raising. The cold start of `npx -y @google-cloud/gcloud-mcp`
+# can take 4-6s on a cold npm cache.
+_WORKER_BOOT_TIMEOUT = 30.0
+
 
 class NotConfiguredError(RuntimeError):
     """Raised when an MCP path is invoked but its config is unset.
 
-    Caught by `gcp_store` so the seed fallback kicks in cleanly instead
-    of bubbling up as a 500.
+    Caught by `gcp_store` so the seed fallback kicks in cleanly.
     """
 
 
 # --- Config builders ----------------------------------------------------
 
 def _split_cmd(cmd: str) -> tuple[str, List[str]]:
-    """Split a full command string ('npx -y @foo/bar') into (program, args).
-
-    Trivial whitespace split — sufficient for the launch commands we
-    expect; non-trivial quoting is the user's problem (and they can use
-    GCLOUD_MCP_COMMAND_PROGRAM / GCLOUD_MCP_COMMAND_ARGS to bypass).
-    """
+    """Split a full command string ('npx -y @foo/bar') into (program, args)."""
     parts = cmd.strip().split()
     if not parts:
         raise NotConfiguredError("MCP command is empty.")
     return parts[0], parts[1:]
 
 
-def _stdio_server_config(cmd: str, env: Optional[Dict[str, str]] = None) -> Dict[str, Any]:
+def _stdio_server_config(
+    cmd: str, env: Optional[Dict[str, str]] = None
+) -> Dict[str, Any]:
     """Build the inner-server dict shape mcp-use's `from_dict` expects
-    for stdio transport (the presence of `"command"` selects StdioConnector).
+    for stdio transport (presence of `"command"` selects StdioConnector).
     """
     program, args = _split_cmd(cmd)
     cfg: Dict[str, Any] = {"command": program, "args": args}
@@ -77,103 +79,141 @@ def _stdio_server_config(cmd: str, env: Optional[Dict[str, str]] = None) -> Dict
 
 
 def _gcloud_config() -> Dict[str, Any]:
-    """Compose the mcp-use config for the gcloud MCP. Always available
-    (the npx fetch + ADC authentication happens inside the server)."""
     cmd = os.getenv("GCLOUD_MCP_COMMAND", "").strip() or _DEFAULT_GCLOUD_MCP_CMD
     return {"mcpServers": {"gcloud": _stdio_server_config(cmd)}}
 
 
 def _bigquery_config() -> Dict[str, Any]:
-    """Compose the mcp-use config for the BigQuery MCP, or raise.
-
-    BigQuery MCP is optional — unset means we fall through to seed for
-    billing. The user picks whichever community BQ MCP they prefer; we
-    just need the launch command in BIGQUERY_MCP_COMMAND.
-    """
     cmd = os.getenv("BIGQUERY_MCP_COMMAND", "").strip()
     if not cmd:
         raise NotConfiguredError(
             "BIGQUERY_MCP_COMMAND is unset. Set it to your BigQuery MCP "
-            "launch command (e.g. 'npx -y mcp-bigquery-server'), or rely "
-            "on the seeded fallback in gcp_store."
+            "launch command (e.g. 'npx -y @ergut/mcp-bigquery-server …'), "
+            "or rely on the seeded fallback in gcp_store."
         )
     project = os.getenv("GCP_PROJECT_ID", "")
     env = {"BIGQUERY_PROJECT_ID": project} if project else None
     return {"mcpServers": {"bigquery": _stdio_server_config(cmd, env=env)}}
 
 
-# --- async-from-sync trampoline (verbatim from deleted notion_mcp.py) ---
+# --- Persistent MCP worker ----------------------------------------------
 
-async def _call_tool_async(
-    config: Dict[str, Any], server_id: str, tool: str, args: Dict[str, Any]
-) -> Any:
-    """Open a fresh mcp-use session, call one tool, close.
+class _MCPWorker:
+    """Long-lived thread with an asyncio loop and one MCP session.
 
-    Per-call sessions keep this stateless — important when `langgraph dev`
-    cycles event loops between turns.
+    `call(tool, args)` is sync from the caller's perspective: it pushes
+    a job onto the worker's queue and blocks on a Future for the result.
+    The worker thread runs the actual `session.call_tool` inside its own
+    event loop, then sends the result back via the Future.
+
+    On first construction, the thread:
+      1. Creates a fresh event loop
+      2. Spawns the MCP subprocess via `MCPClient.from_dict(...)`
+      3. Opens a session
+      4. Sets `_ready` so callers can proceed
+    Any boot error sets `_error` and is re-raised to every subsequent
+    `call(...)`.
     """
-    from mcp_use import MCPClient  # lazy: mcp-use is heavy
 
-    client = MCPClient.from_dict(config)
-    try:
-        session = await client.create_session(server_id)
-        if session is None:
-            raise RuntimeError(
-                f"Failed to create MCP session for {server_id!r}. "
-                f"Check the launch command and (for gcloud) ADC."
-            )
-        return await session.call_tool(tool, args)
-    finally:
-        try:
-            await client.close_all_sessions()
-        except Exception:  # noqa: BLE001 - best-effort cleanup
-            pass
+    def __init__(self, config: Dict[str, Any], server_id: str) -> None:
+        self._config = config
+        self._server_id = server_id
+        self._queue: queue.Queue[Optional[tuple[concurrent.futures.Future, str, Dict[str, Any]]]] = queue.Queue()
+        self._ready = threading.Event()
+        self._error: Optional[BaseException] = None
+        self._thread = threading.Thread(
+            target=self._run,
+            name=f"mcp-worker[{server_id}]",
+            daemon=True,
+        )
+        self._thread.start()
 
-
-def _run_sync(coro: Any) -> Any:
-    """Run an async coroutine to completion from sync code, even when
-    a parent event loop is already running.
-
-    `langgraph dev` runs tools through a sync interface that's itself
-    inside an event loop — `asyncio.run` would error with
-    "asyncio.run() cannot be called from a running event loop".
-    Detect that and dispatch to a worker thread with its own loop.
-    """
-    try:
-        asyncio.get_running_loop()
-        running = True
-    except RuntimeError:
-        running = False
-
-    if not running:
-        return asyncio.run(coro)
-
-    result_holder: Dict[str, Any] = {}
-
-    def _runner() -> None:
+    def _run(self) -> None:
         loop = asyncio.new_event_loop()
-        try:
-            asyncio.set_event_loop(loop)
-            result_holder["value"] = loop.run_until_complete(coro)
-        except Exception as e:  # noqa: BLE001
-            result_holder["error"] = e
-        finally:
-            loop.close()
+        asyncio.set_event_loop(loop)
 
-    t = threading.Thread(target=_runner, daemon=True)
-    t.start()
-    t.join()
-    if "error" in result_holder:
-        raise result_holder["error"]  # type: ignore[misc]
-    return result_holder.get("value")
+        client = None
+        session = None
+        try:
+            from mcp_use import MCPClient  # lazy: heavy import
+
+            client = MCPClient.from_dict(self._config)
+            session = loop.run_until_complete(
+                client.create_session(self._server_id)
+            )
+            if session is None:
+                raise RuntimeError(
+                    f"Failed to create MCP session for {self._server_id!r}."
+                )
+        except BaseException as e:  # noqa: BLE001
+            self._error = e
+            self._ready.set()
+            return
+        self._ready.set()
+
+        # Main loop — one request at a time. The MCP protocol is
+        # request/response, so serialization here is correct.
+        while True:
+            item = self._queue.get()
+            if item is None:  # shutdown sentinel
+                break
+            future, tool, args = item
+            if future.cancelled():
+                continue
+            try:
+                result = loop.run_until_complete(session.call_tool(tool, args))
+                future.set_result(result)
+            except BaseException as e:  # noqa: BLE001
+                future.set_exception(e)
+
+        try:
+            if client is not None:
+                loop.run_until_complete(client.close_all_sessions())
+        except Exception:  # noqa: BLE001
+            pass
+        loop.close()
+
+    def call(self, tool: str, args: Dict[str, Any], timeout: float = 60.0) -> Any:
+        # Wait for the worker to finish booting (session opened or error).
+        if not self._ready.wait(timeout=_WORKER_BOOT_TIMEOUT):
+            raise RuntimeError(
+                f"MCP worker for {self._server_id!r} did not become ready in "
+                f"{_WORKER_BOOT_TIMEOUT}s — check the launch command."
+            )
+        if self._error is not None:
+            raise self._error
+        f: concurrent.futures.Future = concurrent.futures.Future()
+        self._queue.put((f, tool, args))
+        return f.result(timeout=timeout)
+
+    def shutdown(self) -> None:
+        self._queue.put(None)
+
+
+# Module-level worker registry. Lazy-init on first `_get_worker(...)`.
+_workers: Dict[str, _MCPWorker] = {}
+_workers_lock = threading.Lock()
+
+
+def _get_worker(server_id: str, config_factory: Callable[[], Dict[str, Any]]) -> _MCPWorker:
+    """Return a live worker for `server_id`, creating one on demand.
+
+    The config_factory is only called when we actually need to build
+    a new worker — that's where `NotConfiguredError` may surface.
+    """
+    with _workers_lock:
+        w = _workers.get(server_id)
+        if w is None or not w._thread.is_alive():
+            w = _MCPWorker(config_factory(), server_id)
+            _workers[server_id] = w
+        return w
 
 
 def _extract_payload(result: Any) -> Any:
     """Normalize an MCP tool-call result.
 
-    Returns the parsed JSON payload (`dict` or `list`) when the server
-    emits structured content, or the raw text content when it's not
-    JSON. Raises with the server's error text on errored results.
+    Returns parsed JSON when the server emits structured content, or
+    the raw text content when it's not JSON. Raises on errored results.
     """
     if result is None:
         raise RuntimeError("MCP returned no result")
@@ -196,8 +236,6 @@ def _extract_payload(result: Any) -> Any:
         try:
             return json.loads(text)
         except json.JSONDecodeError:
-            # gcloud-mcp returns CLI stdout as plain text on success and
-            # error messages on failure — surface as text.
             if getattr(result, "isError", False):
                 raise RuntimeError(f"MCP error: {text}")
             return text
@@ -212,32 +250,23 @@ def gcloud_run(command: str) -> Any:
 
     Args:
         command: The CLI invocation MINUS the leading `gcloud `.
-            e.g. "run services list --format=json --project=foo"
-            or "projects list --format=json".
+            e.g. "run services list --format=json --project=foo".
 
     Returns: parsed JSON when the command emits JSON, else raw stdout.
     Raises NotConfiguredError when gcloud isn't authenticated.
 
-    The official `@google-cloud/gcloud-mcp` tool signature takes
-    `{args: string[]}` (verified against v1.x — passing `command` as
-    a single string yields a Zod 'args required' error). We split on
-    whitespace; non-trivial quoting isn't currently supported.
+    Cold-start cost (first call): ~3s. Warm cost: ~150-500ms depending
+    on the gcloud command itself.
     """
     if not is_gcloud_authenticated():
         raise NotConfiguredError(
             "gcloud isn't authenticated. Run `gcloud auth application-default "
             "login` and re-try."
         )
+    worker = _get_worker("gcloud", _gcloud_config)
     args = command.strip().split()
     return _extract_payload(
-        _run_sync(
-            _call_tool_async(
-                _gcloud_config(),
-                "gcloud",
-                "run_gcloud_command",
-                {"args": args},
-            )
-        )
+        worker.call("run_gcloud_command", {"args": args})
     )
 
 
@@ -249,24 +278,14 @@ def bq_query(sql: str) -> Dict[str, Any]:
     Returns the MCP server's response (shape varies by server). Raises
     NotConfiguredError when BIGQUERY_MCP_COMMAND is unset.
     """
-    config = _bigquery_config()  # may raise NotConfiguredError
-    return _extract_payload(
-        _run_sync(
-            _call_tool_async(config, "bigquery", "query", {"sql": sql})
-        )
-    )
+    worker = _get_worker("bigquery", _bigquery_config)
+    return _extract_payload(worker.call("query", {"sql": sql}))
 
 
 # --- Sentinels ----------------------------------------------------------
 
 def is_gcloud_authenticated() -> bool:
-    """Best-effort check that ADC is set up.
-
-    Two signals:
-    - `gcloud` is on PATH (or GCLOUD_MCP_COMMAND is overridden — assume yes)
-    - the ADC credentials file exists at the standard location
-    Either returns False → callers fall through to seed.
-    """
+    """Best-effort check that ADC is set up."""
     adc_path = (
         Path(os.getenv("GOOGLE_APPLICATION_CREDENTIALS", "")).expanduser()
         if os.getenv("GOOGLE_APPLICATION_CREDENTIALS")
@@ -274,11 +293,8 @@ def is_gcloud_authenticated() -> bool:
     )
     if not adc_path.is_file():
         return False
-    # If the user overrode the command, assume they know what they're doing
-    # (the command might run in Docker or a remote sandbox).
     if os.getenv("GCLOUD_MCP_COMMAND", "").strip():
         return True
-    # Otherwise we need npx (and underneath, gcloud) to be reachable.
     return shutil.which("npx") is not None
 
 
