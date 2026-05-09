@@ -92,6 +92,7 @@ function CanvasInner() {
       <CopilotSidebar
         defaultOpen
         width={420}
+        header={{ title: "gpilot" }}
         input={{ disclaimer: () => null, className: "pb-6" }}
       />
     </>

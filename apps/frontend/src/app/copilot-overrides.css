@@ -201,12 +201,46 @@
   display: none !important;
 }
 
-/* CopilotKit's modal header (often shows brand name); kill it */
+/* CopilotKit's modal header — restyled as a minimalist strip */
+[data-testid="copilot-modal-header"],
 [data-copilotkit] [class*="ModalHeader"],
-[data-copilotkit] header[class*="cpk:"] {
+.copilotKitHeader {
   border-bottom: 1px solid var(--border) !important;
   background: transparent !important;
   padding: 0.75rem 1rem !important;
+  min-height: 44px !important;
+  box-shadow: none !important;
+}
+
+/* The title slot — small lowercase wordmark in our tokens */
+[data-testid="copilot-header-title"] {
+  font-size: 13px !important;
+  font-weight: 600 !important;
+  letter-spacing: -0.01em !important;
+  color: var(--foreground) !important;
+  text-transform: none !important;
+}
+
+/* Decorative period after "gpilot" — uses --secondary like the brand Logo */
+[data-testid="copilot-header-title"]::after {
+  content: ".";
+  color: var(--secondary);
+  margin-left: 1px;
+}
+
+/* Close button — square, ghost, hairline-border on hover */
+[data-testid="copilot-close-button"] {
+  background: transparent !important;
+  border: 0 !important;
+  border-radius: 4px !important;
+  width: 24px !important;
+  height: 24px !important;
+  color: var(--muted-foreground) !important;
+}
+
+[data-testid="copilot-close-button"]:hover {
+  color: var(--foreground) !important;
+  background: var(--muted) !important;
 }
 
 /* In-chat license warning banner */
