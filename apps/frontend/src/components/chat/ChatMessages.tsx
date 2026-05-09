@@ -3,6 +3,7 @@
 import { useEffect, useMemo, useRef } from "react";
 import { useAgent } from "@copilotkit/react-core/v2";
 import { ToolFallbackCard } from "@/components/copilot/ToolFallbackCard";
+import { MessageSkeleton } from "./MessageSkeleton";
 import { ThinkingIndicator } from "./ThinkingIndicator";
 
 /**
@@ -39,7 +40,13 @@ type AnyMessage = {
   name?: string;
 };
 
-export function ChatMessages({ busy = false }: { busy?: boolean }) {
+export function ChatMessages({
+  busy = false,
+  connecting = false,
+}: {
+  busy?: boolean;
+  connecting?: boolean;
+}) {
   const { agent } = useAgent();
   const messages = (agent?.messages ?? []) as AnyMessage[];
 
@@ -79,6 +86,10 @@ export function ChatMessages({ busy = false }: { busy?: boolean }) {
     return map;
   }, [messages]);
 
+  // Skeleton while CopilotKit's connectAgent is hydrating an existing
+  // thread's history and we have nothing to render yet.
+  const showSkeleton = connecting && messages.length === 0;
+
   return (
     <div
       ref={containerRef}
@@ -86,6 +97,7 @@ export function ChatMessages({ busy = false }: { busy?: boolean }) {
       style={{ scrollBehavior: "smooth" }}
     >
       <div className="mx-auto flex max-w-3xl flex-col">
+        {showSkeleton ? <MessageSkeleton /> : null}
         {(() => {
           let userIndex = 0;
           return messages.map((m) => {

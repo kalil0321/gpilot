@@ -53,6 +53,7 @@ function ChatColumn({
   const { copilotkit } = useCopilotKit();
 
   const [busy, setBusy] = useState(false);
+  const [connecting, setConnecting] = useState(true);
   const flushedQueueRef = useRef(false);
 
   // Hydrate the thread's message history on mount / threadId change.
@@ -64,6 +65,7 @@ function ChatColumn({
   useEffect(() => {
     if (!agent || !threadId) return;
     let detached = false;
+    setConnecting(true);
     const ctl = new AbortController();
     // HttpAgent reads from .abortController; setting it lets us cancel
     // the in-flight connect on unmount / threadId change.
@@ -72,9 +74,14 @@ function ChatColumn({
       a.abortController = ctl;
     }
     a.threadId = threadId as string;
-    void copilotkit.connectAgent({ agent }).catch((err: unknown) => {
-      if (!detached) console.error("connectAgent failed", err);
-    });
+    copilotkit
+      .connectAgent({ agent })
+      .catch((err: unknown) => {
+        if (!detached) console.error("connectAgent failed", err);
+      })
+      .finally(() => {
+        if (!detached) setConnecting(false);
+      });
     return () => {
       detached = true;
       try {
@@ -156,7 +163,7 @@ function ChatColumn({
         </div>
       </header>
 
-      <ChatMessages busy={busy} />
+      <ChatMessages busy={busy} connecting={connecting} />
 
       <div className="px-4 pb-3 pt-1">
         <div className="mx-auto max-w-3xl">
