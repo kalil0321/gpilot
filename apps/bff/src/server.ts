@@ -20,10 +20,15 @@ const agent = new LangGraphAgent({
     process.env.LANGGRAPH_DEPLOYMENT_URL ?? "http://localhost:8123",
   graphId: "default",
   langsmithApiKey: process.env.LANGSMITH_API_KEY ?? "",
-  // 60 (vs LangGraph default 25) leaves headroom for the deepagents planner
-  // loop on multi-step turns like "draft email + queue".
+  // The deep-agent middleware chain (todo / filesystem / subagents /
+  // summarization) eats ~6-8 graph steps per real model→tools round
+  // trip, so the effective ceiling is recursion_limit / 7. We bumped
+  // from 60 → 150 because gpilot now ships 12 tools + multi-step
+  // flows (gcloud + bigquery + render_ui, or sandbox setup → clone →
+  // edit → commit → push → gh pr create). 60 was hitting the cap on
+  // simple "open a PR" prompts; 150 gives ~21 real turns of headroom.
   assistantConfig: {
-    recursion_limit: Number(process.env.LANGGRAPH_RECURSION_LIMIT ?? 60),
+    recursion_limit: Number(process.env.LANGGRAPH_RECURSION_LIMIT ?? 150),
   },
 });
 

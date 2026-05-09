@@ -200,8 +200,8 @@ def _run_in_sandbox(
 
 @tool
 def sandbox_create(
-    state: Annotated[Any, InjectedState],
-    config: RunnableConfig,
+    state: Annotated[dict, InjectedState] = None,
+    config: RunnableConfig = None,  # type: ignore[assignment]
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
     """Boot (or attach to) the per-thread Daytona sandbox.
@@ -261,7 +261,7 @@ def sandbox_shell(
         "this when chaining commands across cd boundaries (e.g. after "
         "git_clone, set cwd to the cloned repo path).",
     ] = None,
-    state: Annotated[Any, InjectedState] = None,
+    state: Annotated[dict, InjectedState] = None,
     config: RunnableConfig = None,  # type: ignore[assignment]
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
@@ -341,7 +341,7 @@ def sandbox_write_file(
         "workspace (~). Parent directories are created automatically.",
     ],
     content: Annotated[str, "File contents (UTF-8 text)."],
-    state: Annotated[Any, InjectedState] = None,
+    state: Annotated[dict, InjectedState] = None,
     config: RunnableConfig = None,  # type: ignore[assignment]
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
@@ -498,7 +498,7 @@ def sandbox_git_clone(
         "Destination directory (workspace-relative). Defaults to the repo name.",
     ] = None,
     branch: Annotated[Optional[str], "Branch to checkout."] = None,
-    state: Annotated[Any, InjectedState] = None,
+    state: Annotated[dict, InjectedState] = None,
     config: RunnableConfig = None,  # type: ignore[assignment]
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
@@ -672,7 +672,7 @@ def sandbox_expose(
 
 @tool
 def sandbox_github_setup(
-    state: Annotated[Any, InjectedState] = None,
+    state: Annotated[dict, InjectedState] = None,
     config: RunnableConfig = None,  # type: ignore[assignment]
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
@@ -768,7 +768,7 @@ def sandbox_github_setup(
 
 @tool
 def sandbox_gh(
-    args: Annotated[
+    cli_args: Annotated[
         str,
         "Arguments to pass to the `gh` CLI (everything AFTER the leading "
         "'gh '). Examples: 'pr create --title \"...\" --body \"...\"', "
@@ -781,7 +781,7 @@ def sandbox_gh(
         "Working directory inside the sandbox. For repo-scoped commands "
         "(pr create, push, etc.), point this at the cloned repo's path.",
     ] = None,
-    state: Annotated[Any, InjectedState] = None,
+    state: Annotated[dict, InjectedState] = None,
     config: RunnableConfig = None,  # type: ignore[assignment]
     tool_call_id: Annotated[str, InjectedToolCallId] = "",
 ) -> Command:
@@ -808,7 +808,7 @@ def sandbox_gh(
             }
         )
 
-    cmd = f"gh {args.strip()}"
+    cmd = f"gh {cli_args.strip()}"
     try:
         result = _run_in_sandbox(entry, cmd, cwd=cwd, timeout=120)
     except Exception as e:  # noqa: BLE001
