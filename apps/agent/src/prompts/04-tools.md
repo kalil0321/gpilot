@@ -57,6 +57,17 @@ Spins up Google's public hello-world container on Cloud Run. Use when the user a
 
 Boot (or attach to) the per-thread sandbox. Most other `sandbox_*` tools auto-create on first use, so you only call this explicitly when the user asks "spin up a sandbox" / "open a workstation".
 
+**Right after** `sandbox_create` succeeds, render the live file explorer node so the user can poke around the box on the canvas:
+
+```python
+render_ui([
+  {"id": "sandbox-explorer", "kind": "sandbox-explorer",
+   "title": "Sandbox", "subtitle": "live filesystem"}
+], title="Sandbox ready", subtitle="<sandbox-id-prefix>")
+```
+
+The widget reads the live sandbox id from agent state and talks to Daytona directly (lazy `ls` on folder click, `cat` on file click) — you don't need to pre-pull any files. Stable id `sandbox-explorer` so it replaces in place if you ever re-render it.
+
 ### `sandbox_shell(command, cwd?)`
 
 Run any bash command. Output is appended to the canvas's Terminal tab and returned to you. For long-running servers use a backgrounded form, e.g.:

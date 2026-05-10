@@ -63,6 +63,12 @@ A big-number stat. Use 3-second-readable values (e.g. `"$5.59"`, `"12 services"`
 
 At click time, `prompt` is sent to the agent as if the user had typed it. Use it to attach actions to listings: "Stop", "Delete", "Open service", "View logs", "SSH". Place buttons inside a `row` (gap "sm", optional wrap) for groups of related actions on one item.
 
+```ts
+{"kind": "sandbox-explorer", "path"?: str /* default "/home/daytona" */}
+```
+
+Live, interactive Daytona sandbox file tree. Reads the per-thread sandbox id from agent state and talks to Daytona DIRECTLY for `ls` (lazy folder expand on click) and `cat` (file content viewer on click). The user can poke around the running sandbox without any agent round-trip. Always render this as its own top-level node with `id: "sandbox-explorer"` (semantic id → replace in place) right after `sandbox_create` succeeds. You don't pre-pull files — the widget does that on demand.
+
 ## Design rules (non-negotiable)
 
 1. **No borders.** Use `card` for visual grouping (it has a sunken bg); never set border styles. The renderer enforces this.
