@@ -4,10 +4,19 @@ Anchor templates for common requests. Use them as starting points; deviate when 
 
 ## When to use which pattern
 
-- User asks about cost / spend / billing → **Billing rollup**
-- User asks "what's running" / "list resources" / "show services" / "list my VMs" → **Resource inventory**
-- User asks about a specific resource type (VMs, Cloud Run services) and wants to act on items → **VM list with actions** or **Cloud Run service with actions**
-- User asks something narrower (just one service, one region, one timeframe) → compose a tighter view, don't blindly run the full pattern.
+- User asks about cost / spend / billing → **Billing rollup** (id: `billing-rollup`)
+- User asks "what's running" / "list resources" / "show services" / "list my VMs" → **Resource inventory** (id: `resource-inventory`)
+- User asks about a specific resource type (VMs, Cloud Run services) and wants to act on items → **VM list with actions** (id: `vm-list`) or **Cloud Run service with actions** (id: `cloud-run-list`)
+- User asks something narrower (just one service, one region, one timeframe) → compose a tighter view with a unique `id` like `service-<name>-detail`.
+
+## ID conventions (critical — read this first)
+
+The canvas accumulates nodes; each `render_ui` call adds-or-replaces by id. Two flavours:
+
+- **State views** — one stable id per "kind of view". Re-rendering with the same id REPLACES the previous payload. Use kebab-case nouns: `billing-rollup`, `resource-inventory`, `vm-list`, `cloud-run-list`, `budget-summary`, `service-<name>-detail`.
+- **Action records** — one unique id per action. Use kebab-case verb-noun-timestamp: `deploy-leaderboard-20260510-1422`, `repo-my-app-20260510-1430`, `pr-42-20260510`, `gcloud-create-sql-20260510-1450`. These ACCUMULATE so the user sees a chronological trail.
+
+Never mix the two — don't give a deploy card the id `deploy` (it would replace previous deploys), and don't give the billing rollup a timestamped id (it would pile up duplicates).
 
 ## Billing rollup
 
@@ -39,7 +48,7 @@ bigquery(
 
 ```python
 render_ui([
-  {"kind": "stack", "gap": "md", "children": [
+  {"id": "billing-rollup", "kind": "stack", "gap": "md", "children": [
     {"kind": "row", "wrap": True, "children": [
       {"kind": "kpi", "label": "Total spend", "value": "$<sum>", "hint": "Last 60 days"},
       {"kind": "kpi", "label": "Top service", "value": "<svc>",
@@ -72,7 +81,7 @@ gcloud("storage buckets list --format=json")
 
 ```python
 render_ui([
-  {"kind": "stack", "gap": "md", "children": [
+  {"id": "resource-inventory", "kind": "stack", "gap": "md", "children": [
     {"kind": "grid", "cols": 2, "children": [
       # The project itself, always first.
       {"kind": "card", "title": "<project-id>", "subtitle": "GCP Project",
@@ -134,7 +143,7 @@ gcloud("CONFIRMED: compute instances delete <name> --zone=<zone> --quiet")
 
 ```python
 render_ui([
-  {"kind": "stack", "gap": "md", "children": [
+  {"id": "vm-list", "kind": "stack", "gap": "md", "children": [
     {"kind": "grid", "cols": 2, "children": [
       {"kind": "card", "title": "<vm-name>", "subtitle": "Compute Engine · <zone>",
        "children": [
@@ -193,3 +202,124 @@ gcloud("CONFIRMED: compute instances delete hello-vm --zone=us-central1-a --quie
 ```
 
 After the action completes, render the updated state (refresh the list, flip the status tag, or show a confirmation card).
+
+## Action records — drawing what you just did
+
+**Rule**: every meaningful action that produces a user-visible artefact (a URL, a repo, a PR, a deployed service) MUST end with a `render_ui` call that adds an action card. This gives the user a persistent, dismissible record of "what gpilot did" — without making them scroll the chat to find the URL again.
+
+After **creation/destruction** of a resource (deploy, delete, repo create, sandbox web app launch, gcloud-create-anything), do BOTH:
+
+1. Append the action card (unique id with timestamp).
+2. Re-pull the affected inventory and re-render the matching state-view node (e.g. after `gcloud run deploy`, also re-render `resource-inventory` or `cloud-run-list` with the new service in it). The state-view's id stays the same, so it replaces in place — no clutter.
+
+Use the timestamp helpers `<YYYYMMDD-HHMM>` UTC for unique ids. Each card below is ONE node — pass it directly as the only widget in `render_ui([...])` so it lands as one card on the grid.
+
+### Deploy succeeded (Cloud Run, deploy_hello, etc.)
+
+```python
+render_ui([
+  {"id": "deploy-<service>-<YYYYMMDD-HHMM>", "kind": "card",
+   "title": "Deployed: <service>", "subtitle": "Cloud Run · <region>",
+   "children": [
+     {"kind": "row", "children": [
+       {"kind": "tag", "value": "LIVE", "tone": "positive"},
+       {"kind": "tag", "value": "<region>"}
+     ]},
+     {"kind": "keyvalues", "rows": [
+       {"key": "Service", "value": "<svc>"},
+       {"key": "Revision", "value": "<rev>"},
+       {"key": "Image", "value": "<image-or-source>"}
+     ]},
+     {"kind": "link", "href": "<url>", "label": "Open service ↗"}
+   ]}
+], title="Deploy succeeded", subtitle="<service> · <region>")
+```
+
+### Repo created (sandbox_gh repo create)
+
+```python
+render_ui([
+  {"id": "repo-<name>-<YYYYMMDD-HHMM>", "kind": "card",
+   "title": "Repo: <owner>/<name>", "subtitle": "GitHub",
+   "children": [
+     {"kind": "row", "children": [
+       {"kind": "tag", "value": "<public|private>", "tone": "neutral"}
+     ]},
+     {"kind": "keyvalues", "rows": [
+       {"key": "Default branch", "value": "<branch>"},
+       {"key": "Files", "value": "<n>"}
+     ]},
+     {"kind": "link", "href": "https://github.com/<owner>/<name>", "label": "Open on GitHub ↗"}
+   ]}
+], title="Repo created", subtitle="<owner>/<name>")
+```
+
+### PR opened (sandbox_gh pr create)
+
+```python
+render_ui([
+  {"id": "pr-<number>-<YYYYMMDD-HHMM>", "kind": "card",
+   "title": "PR #<number>: <title>", "subtitle": "<owner>/<repo>",
+   "children": [
+     {"kind": "row", "children": [
+       {"kind": "tag", "value": "OPEN", "tone": "positive"},
+       {"kind": "tag", "value": "<branch>"}
+     ]},
+     {"kind": "keyvalues", "rows": [
+       {"key": "Files changed", "value": "<n>"},
+       {"key": "Author", "value": "<user>"}
+     ]},
+     {"kind": "link", "href": "<pr-url>", "label": "Open PR ↗"}
+   ]}
+], title="PR opened", subtitle="<owner>/<repo>#<number>")
+```
+
+### Sandbox web app live (after sandbox_expose)
+
+```python
+render_ui([
+  {"id": "sandbox-app-<name>-<YYYYMMDD-HHMM>", "kind": "card",
+   "title": "Live: <app-name>", "subtitle": "Sandbox · :<port>",
+   "children": [
+     {"kind": "row", "children": [
+       {"kind": "tag", "value": "LIVE", "tone": "positive"},
+       {"kind": "tag", "value": ":<port>"}
+     ]},
+     {"kind": "keyvalues", "rows": [
+       {"key": "Stack", "value": "<framework>"},
+       {"key": "Entry", "value": "<file>"}
+     ]},
+     {"kind": "link", "href": "<preview-url>", "label": "Open preview ↗"}
+   ]}
+], title="Sandbox app live", subtitle="<app-name>")
+```
+
+### Important gcloud command (create/modify/delete a resource)
+
+Reserved for state-changing commands — skip for plain reads (`list`, `describe`).
+
+```python
+render_ui([
+  {"id": "gcloud-<verb>-<resource>-<YYYYMMDD-HHMM>", "kind": "card",
+   "title": "gcloud <verb> <resource>", "subtitle": "<service>",
+   "children": [
+     {"kind": "row", "children": [
+       {"kind": "tag", "value": "<DONE|FAILED>", "tone": "<positive|destructive>"}
+     ]},
+     {"kind": "keyvalues", "rows": [
+       {"key": "Resource", "value": "<name>"},
+       {"key": "Region/Zone", "value": "<r>"}
+     ]},
+     {"kind": "text", "value": "<one-line outcome summary>"}
+   ]}
+], title="gcloud <verb> done", subtitle="<resource>")
+```
+
+After ANY of these create/destroy actions, follow up with the matching state-view re-render in the same turn so the inventory reflects reality:
+
+```python
+# pull fresh data
+gcloud("run services list --platform=managed --format=json")
+# replace the existing inventory node in place (same id)
+render_ui([{"id": "resource-inventory", "kind": "stack", ...}], ...)
+```

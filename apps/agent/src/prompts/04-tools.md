@@ -26,9 +26,24 @@ Run any BigQuery Standard SQL. Use for ad-hoc questions on the billing export, a
 
 ### `render_ui(widgets, title?, subtitle?)`
 
-Compose a custom view from the widget vocabulary and the canvas paints it. The canvas has NO hand-coded views anymore — everything visual flows through this tool. Pull data with `gcloud` / `bigquery` first, then `render_ui` to display.
+Compose a custom view from the widget vocabulary and the canvas paints it. The canvas is a board of "nodes" that accumulate over time — each top-level widget you pass becomes one card on the grid, and the user can dismiss any card individually.
 
-See `05-widget-spec.md` and `06-reference-patterns.md` for schema, design rules, and anchor templates for billing / resource views. Re-call `render_ui` to overwrite the canvas.
+Each top-level widget should carry **two top-level fields**:
+
+- **`id`** — controls the node's lifecycle on the canvas. See below.
+- **`title`** (and optional `subtitle`) — small label rendered as the node's HEADER inside the frosted card so the user always knows what the card represents. Use 1-4 words. Examples: `"Billing rollup"`, `"Deploy succeeded"`, `"Repo: kalil0321/leaderboard"`.
+
+If you don't set `title` on the first top-level widget, the function-level `title=` / `subtitle=` kwargs are auto-injected onto it as a fallback. For multi-node renders, prefer setting `title` on each widget directly.
+
+The `id` chooses lifecycle:
+
+- **Semantic id (REPLACE)** — for views that re-render with fresh data. Reusing the same id replaces the existing node in place. Use `billing-rollup`, `resource-inventory`, `budget-summary`, etc.
+- **Unique id with timestamp (APPEND)** — for one-off action records that should persist alongside others. Use `deploy-<service>-<YYYYMMDD-HHMM>`, `repo-<name>`, `pr-<number>`, `gcloud-<verb>-<YYYYMMDD-HHMM>`.
+- **Omit `id`** — auto-generates a uuid (always appends; can't be re-rendered).
+
+Pick semantic ids deliberately. A second call to `render_ui([{id: "billing-rollup", ...}])` replaces the previous billing rollup; a second call to `render_ui([{id: "deploy-foo-20260510", ...}])` would replace the previous deploy card (rarely what you want — pick a unique id per action).
+
+See `05-widget-spec.md` and `06-reference-patterns.md` for schema, design rules, and anchor templates for billing / resource / action views. Pull data with `gcloud` / `bigquery` first, then `render_ui` to display.
 
 ## Action shortcuts
 
