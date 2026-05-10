@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 
 import { Figtree, Spline_Sans_Mono } from "next/font/google";
 import { CopilotKitProviderShell } from "@/components/copilot/CopilotKitProviderShell";
@@ -26,8 +26,30 @@ const splineMono = Spline_Sans_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "gpilot",
+  // Brand: lowercase wordmark in the UI ("gpilot."), title-case in OS chrome
+  // (browser tab, iOS home-screen, Cmd-Tab) so it doesn't read as a typo.
+  applicationName: "Gpilot",
+  title: {
+    default: "Gpilot",
+    template: "%s · Gpilot",
+  },
   description: "Agentic interface for Google Cloud.",
+  manifest: "/manifest.webmanifest",
+  appleWebApp: {
+    capable: true,
+    title: "Gpilot",
+    statusBarStyle: "black-translucent",
+  },
+  formatDetection: {
+    telephone: false,
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#EFEFEF" },
+    { media: "(prefers-color-scheme: dark)", color: "#0A0A0B" },
+  ],
 };
 
 export default function RootLayout({
