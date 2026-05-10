@@ -265,6 +265,14 @@
   background: var(--sidebar-hover);
 }
 
+.mockUserButton:active {
+  background: var(--sidebar-active);
+}
+
+.mockUserButton[data-state="open"] {
+  background: var(--sidebar-active);
+}
+
 .mockUserAvatar {
   flex: none;
   display: flex;
@@ -317,6 +325,14 @@
 .mockUserButtonCollapsed:hover,
 .mockUserButtonCollapsed:focus-visible {
   background: var(--sidebar-hover);
+}
+
+.mockUserButtonCollapsed:active {
+  background: var(--sidebar-active);
+}
+
+.mockUserButtonCollapsed[data-state="open"] {
+  background: var(--sidebar-active);
 }
 
 .mockUserText {

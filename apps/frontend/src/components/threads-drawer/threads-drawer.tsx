@@ -1,10 +1,27 @@
 "use client";
 
-import { ChevronsUpDown, PanelLeftClose, PanelLeftOpen, Plus, Trash2 } from "lucide-react";
+import {
+  ChevronsUpDown,
+  CircleUser,
+  LogOut,
+  PanelLeftClose,
+  PanelLeftOpen,
+  Plus,
+  Settings,
+  Trash2,
+} from "lucide-react";
 import { useEffect, useId, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { useThreads } from "@copilotkit/react-core/v2";
 import { Logo } from "@/components/brand/Logo";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import styles from "./threads-drawer.module.css";
 
 export interface ThreadsDrawerProps {
@@ -37,43 +54,83 @@ const MOCK_USER = {
   initials: "DU",
 } as const;
 
-function MockUserButton({ variant }: { variant: "expanded" | "collapsed" }) {
-  if (variant === "collapsed") {
-    return (
+/** Demo account menu — backend auth can replace callbacks later. */
+function MockUserMenu({ variant }: { variant: "expanded" | "collapsed" }) {
+  const onPlaceholderAction = () => {
+    /* Placeholder until real profile / settings / sign-out flows exist */
+  };
+
+  const trigger =
+    variant === "collapsed" ? (
       <button
         aria-label={`Account: ${MOCK_USER.name} (mock)`}
         className={styles.mockUserButtonCollapsed}
-        title={`${MOCK_USER.name} · mock`}
+        title={`${MOCK_USER.name} · menu`}
         type="button"
       >
         <span className={styles.mockUserAvatarSmall} aria-hidden>
           {MOCK_USER.initials}
         </span>
       </button>
+    ) : (
+      <button
+        aria-label={`Account: ${MOCK_USER.name} (mock)`}
+        className={styles.mockUserButton}
+        title={`${MOCK_USER.name} · menu`}
+        type="button"
+      >
+        <span className={styles.mockUserAvatar} aria-hidden>
+          {MOCK_USER.initials}
+        </span>
+        <span className={styles.mockUserText}>
+          <span className={styles.mockUserName}>{MOCK_USER.name}</span>
+          <span className={styles.mockUserEmail}>{MOCK_USER.email}</span>
+        </span>
+        <ChevronsUpDown
+          aria-hidden
+          className={styles.mockUserCaret}
+          size={14}
+          strokeWidth={2}
+        />
+      </button>
     );
-  }
 
   return (
-    <button
-      aria-label={`Account: ${MOCK_USER.name} (mock)`}
-      className={styles.mockUserButton}
-      title={`${MOCK_USER.name} · mock`}
-      type="button"
-    >
-      <span className={styles.mockUserAvatar} aria-hidden>
-        {MOCK_USER.initials}
-      </span>
-      <span className={styles.mockUserText}>
-        <span className={styles.mockUserName}>{MOCK_USER.name}</span>
-        <span className={styles.mockUserEmail}>{MOCK_USER.email}</span>
-      </span>
-      <ChevronsUpDown
-        aria-hidden
-        className={styles.mockUserCaret}
-        size={14}
-        strokeWidth={2}
-      />
-    </button>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>{trigger}</DropdownMenuTrigger>
+      <DropdownMenuContent
+        side="top"
+        align={variant === "collapsed" ? "center" : "start"}
+        className="min-w-52"
+        sideOffset={6}
+      >
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex flex-col gap-0.5">
+            <p className="text-sm leading-tight font-medium">{MOCK_USER.name}</p>
+            <p className="text-muted-foreground text-xs leading-tight">
+              {MOCK_USER.email}
+            </p>
+            <p className="text-muted-foreground pt-1 text-[10px] font-mono uppercase tracking-wider">
+              Demo · not signed in
+            </p>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem onSelect={onPlaceholderAction}>
+          <CircleUser aria-hidden size={16} strokeWidth={2} />
+          Profile
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={onPlaceholderAction}>
+          <Settings aria-hidden size={16} strokeWidth={2} />
+          Settings
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem variant="destructive" onSelect={onPlaceholderAction}>
+          <LogOut aria-hidden size={16} strokeWidth={2} />
+          Sign out
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -299,7 +356,7 @@ export default function ThreadsDrawer({
             </div>
           </div>
           <div className={styles.collapsedRailBottom}>
-            <MockUserButton variant="collapsed" />
+            <MockUserMenu variant="collapsed" />
           </div>
         </div>
       </aside>
@@ -492,7 +549,7 @@ export default function ThreadsDrawer({
           </div>
 
           <div className={styles.drawerFooter}>
-            <MockUserButton variant="expanded" />
+            <MockUserMenu variant="expanded" />
           </div>
         </div>
       </aside>

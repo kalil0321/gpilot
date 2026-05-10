@@ -7,6 +7,9 @@
   --foreground: #0A0A0B;
   --card: #F7F7F7;
   --card-foreground: #0A0A0B;
+  /* Popovers / dropdowns — same elevated surface as card (tokens were missing) */
+  --popover: #F7F7F7;
+  --popover-foreground: #0A0A0B;
   --primary: #0A0A0B;
   --primary-foreground: #FAFAFA;
   /* Monochrome: secondary & accent collapse onto foreground. The brand
@@ -46,6 +49,10 @@
   --sidebar-accent-foreground: #FAFAFA;
   --sidebar-border: #DDDDDD;
   --sidebar-ring: rgba(10, 10, 11, 0.18);
+  /* Drawer hover / muted text — referenced by threads-drawer.module.css */
+  --sidebar-muted: var(--muted-foreground);
+  --sidebar-hover: color-mix(in oklab, var(--muted) 44%, var(--sidebar));
+  --sidebar-active: color-mix(in oklab, var(--muted) 60%, var(--sidebar));
 }
 
 .dark {
@@ -53,6 +60,8 @@
   --foreground: #F2F2F2;
   --card: #141416;
   --card-foreground: #F2F2F2;
+  --popover: #141416;
+  --popover-foreground: #F2F2F2;
   --primary: #F2F2F2;
   --primary-foreground: #0A0A0B;
   --secondary: #F2F2F2;
@@ -83,6 +92,9 @@
   --sidebar-accent-foreground: #0A0A0B;
   --sidebar-border: #26262A;
   --sidebar-ring: rgba(242, 242, 242, 0.22);
+  --sidebar-muted: var(--muted-foreground);
+  --sidebar-hover: color-mix(in oklab, var(--muted) 50%, var(--sidebar));
+  --sidebar-active: color-mix(in oklab, var(--muted) 68%, var(--sidebar));
 }
 
 @theme inline {
@@ -92,6 +104,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
