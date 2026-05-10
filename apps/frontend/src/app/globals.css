@@ -371,3 +371,77 @@ html {
   }
 }
 
+/* Markdown chat-message body styles. The element-level rules in
+ * MarkdownMessage handle most of the look; this scope handles a few things
+ * the React-side can't: nested element selectors, stable text wrapping for
+ * long URLs, and the Shiki code block container/dark-mode swap. */
+.gpilot-prose {
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+}
+
+.gpilot-prose strong {
+  font-weight: 600;
+}
+
+.gpilot-prose ul ul,
+.gpilot-prose ol ol,
+.gpilot-prose ul ol,
+.gpilot-prose ol ul {
+  margin-block: 0.25rem;
+}
+
+.gpilot-prose li > p {
+  margin-block: 0;
+}
+
+/* Shiki block from react-shiki — we set `addDefaultStyles={false}` and skin
+ * it ourselves with the same surface tokens used by inline code, so it
+ * matches the chat bubble in either theme. */
+.gpilot-prose .gpilot-codeblock {
+  position: relative;
+  margin-block: 0.6rem;
+  padding: 0.75rem 0.9rem;
+  border-radius: 0.5rem;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border);
+  overflow-x: auto;
+  font-size: 0.85em;
+  line-height: 1.55;
+}
+
+.gpilot-prose .gpilot-codeblock pre,
+.gpilot-prose .gpilot-codeblock code {
+  background: transparent !important;
+  padding: 0;
+  margin: 0;
+  font-family: var(--font-geist-mono, ui-monospace, SFMono-Regular, Menlo,
+    monospace);
+}
+
+/* Language label injected by react-shiki (top-right corner). */
+.gpilot-prose .gpilot-codeblock > span:first-child {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.5rem;
+  font-size: 0.72rem;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--muted-foreground);
+  pointer-events: none;
+  user-select: none;
+}
+
+/* Dual-theme swap: react-shiki sets `--shiki-light*` and `--shiki-dark*`
+ * CSS variables on the highlighted spans. With `defaultColor="light"` the
+ * light variant is active by default; flip to the dark variant when the
+ * `.dark` theme class is on the document root. */
+.dark .gpilot-prose .shiki,
+.dark .gpilot-prose .shiki span {
+  color: var(--shiki-dark) !important;
+  background-color: var(--shiki-dark-bg) !important;
+  font-style: var(--shiki-dark-font-style) !important;
+  font-weight: var(--shiki-dark-font-weight) !important;
+  text-decoration: var(--shiki-dark-text-decoration) !important;
+}
+

@@ -5,14 +5,17 @@ import { useAgent } from "@copilotkit/react-core/v2";
 import { ToolFallbackCard } from "@/components/copilot/ToolFallbackCard";
 import { MessageSkeleton } from "./MessageSkeleton";
 import { ThinkingIndicator } from "./ThinkingIndicator";
+import { MarkdownMessage } from "./MarkdownMessage";
 
 /**
  * Render the AG-UI `agent.messages` array as a chat stream.
  *
  * Roles handled:
  *   user        right-aligned, plain text, hairline-bottom separator
- *   assistant   left-aligned prose, markdown rendered as plain text for now
- *               (we can swap to Streamdown if needed later)
+ *   assistant   left-aligned GitHub-Flavored Markdown (react-markdown +
+ *               remark-gfm + react-shiki for code blocks). Tool calls in
+ *               the same message are rendered above the prose as
+ *               ToolFallbackCard rows.
  *   tool        ToolFallbackCard inline status row
  *   system / developer / activity / reasoning  hidden
  *
@@ -292,12 +295,9 @@ function AssistantBubble({
         );
       })}
       {hasContent ? (
-        <p
-          className="whitespace-pre-wrap text-[15px] leading-relaxed"
-          style={{ color: "var(--foreground)" }}
-        >
-          {content}
-        </p>
+        <div style={{ color: "var(--foreground)" }}>
+          <MarkdownMessage content={content} />
+        </div>
       ) : null}
     </div>
   );
