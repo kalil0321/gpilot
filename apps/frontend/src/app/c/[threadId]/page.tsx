@@ -16,7 +16,6 @@ import { useSelectedModel } from "@/components/chat/ModelSelector";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ThreadsDrawer } from "@/components/threads-drawer";
 import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
-import { ThemeProvider } from "@/hooks/use-theme";
 import { WidgetActionsProvider } from "@/lib/gpilot/widget-actions";
 
 const QUEUED_KEY = "gpilot.queuedMessage";
@@ -534,10 +533,8 @@ function ChatLayout() {
 
 export default function Page() {
   return (
-    <ThemeProvider>
-      <ClientOnly>
-        <ChatLayout />
-      </ClientOnly>
-    </ThemeProvider>
+    <ClientOnly>
+      <ChatLayout />
+    </ClientOnly>
   );
 }
