@@ -15,7 +15,6 @@
   min-height: 100svh;
   height: 100dvh;
   background: var(--sidebar);
-  border-right: 1px solid var(--border);
   transition: width 180ms ease;
   isolation: isolate;
 }
@@ -571,7 +570,7 @@
   flex: 1;
   min-height: 0;
   flex-direction: column;
-  gap: 0;
+  gap: 0.2rem;
   overflow-y: auto;
   /* Reserve scrollbar space so the list doesn't shift horizontally
      when the scrollbar appears during the thread-enter animation. */
@@ -581,8 +580,6 @@
 
 .threadRow {
   position: relative;
-  border-bottom: 1px solid
-    color-mix(in oklab, var(--border) 55%, transparent);
 }
 
 .threadItem {
@@ -592,14 +589,15 @@
   min-height: 2.5rem;
   padding: 0.4rem 0.5rem 0.45rem;
   border: 0;
-  border-radius: 0;
+  border-radius: 0.5rem;
   background: transparent;
   color: inherit;
   text-align: left;
   cursor: pointer;
   transition:
     background-color 120ms ease,
-    padding-right 140ms ease;
+    padding-right 140ms ease,
+    box-shadow 120ms ease;
 }
 
 .threadItem:hover,
@@ -614,10 +612,9 @@
 
 .threadItemSelected,
 .threadItemSelected:hover {
-  background: color-mix(in oklab, var(--muted) 55%, transparent);
-  /* Sharp left rail only — no border-radius, or the inset bar rounds and
-   * the row background reads as a shifting “pill”. */
-  box-shadow: inset 3px 0 0 0 var(--foreground);
+  background: color-mix(in oklab, var(--muted) 55%, var(--sidebar));
+  box-shadow: inset 0 0 0 1px
+    color-mix(in oklab, var(--foreground) 12%, transparent);
 }
 
 .threadItemAnimatingIn {
