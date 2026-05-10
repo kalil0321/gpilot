@@ -1,3 +1,5 @@
+![gpilot](apps/frontend/public/gpilot-banner.jpg)
+
 # gpilot.
 
 > **Agentic interface for Google Cloud.** Chat to inspect your billing, list what's running, scaffold a small app in a per-thread sandbox, push it to GitHub, and deploy it to Cloud Run — every step lands as a card on a generative canvas you can dismiss, resize, and rearrange.
