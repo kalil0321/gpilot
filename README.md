@@ -1,8 +1,30 @@
-# Generative UI Global Hackathon: Agentic Interfaces Starter Kit
+# gpilot.
+
+> **Agentic interface for Google Cloud.** Chat to inspect your billing, list what's running, scaffold a small app in a per-thread sandbox, push it to GitHub, and deploy it to Cloud Run — every step lands as a card on a generative canvas you can dismiss, resize, and rearrange.
+
+Built for the **Generative UI Global Hackathon: Agentic Interfaces**.
+
+## What it does
+
+- **Billing-aware chat.** *"How much did I spend this month?"* → live BigQuery query against your billing export, results rendered as a KPI + chart node on the canvas.
+- **Live resource inventory.** Parallel `gcloud` queries → grid of cards for projects, Cloud Run services, VMs, and buckets, each with inline action buttons (SSH / Stop / Delete).
+- **Sandbox-to-deploy.** Per-thread Daytona sandbox writes source files, pushes to a fresh GitHub repo, then runs `gcloud run deploy --source .` — the live URL lands on the canvas as a clickable card.
+- **Generative canvas.** Each agent action becomes a node — frosted card with title, content, hover-to-dismiss, drag-to-resize. State views (billing, inventory) replace in place; action records (deploy, repo, PR) accumulate as a chronological trail.
+- **Multi-model.** Switch between Gemini Flash Lite / Pro, Claude Sonnet / Opus 4.6–4.7, GPT-5.3 Codex / 5.4 per turn from the model picker — selection persists in localStorage.
+
+## Demo target
+
+> *"How much have I spent this month? Now break it down day by day. List my resources. Build me a small Game-of-Life web app, push it to a new repo `gpilot-life`, and deploy to Cloud Run so I can share the URL."*
+
+Five turns, five canvas cards, one live URL. ~3 minutes end-to-end.
+
+---
+
+## Built on the Generative UI Global Hackathon Starter Kit
 
 ![Hackathon Banner](apps/frontend/public/banner.jpg)
 
-Welcome to the **Generative UI Global Hackathon: Agentic Interfaces**! This starter kit gives you a complete AI-powered application with durable conversation threads, an agent-driven canvas, real-world MCP integrations, and a deployable MCP App — wired up with CopilotKit, LangChain Deep Agents, Gemini, A2UI, Notion MCP (via mcp-use), Manufact, and Daytona.
+gpilot is built on top of the **Generative UI Global Hackathon: Agentic Interfaces** starter kit — a complete AI-powered application with durable conversation threads, an agent-driven canvas, real-world MCP integrations, and a deployable MCP App, wired up with CopilotKit, LangChain Deep Agents, Gemini, A2UI, MCP (via mcp-use), Manufact, and Daytona. The rest of this README documents the underlying starter kit; the gpilot-specific layer (GCP integration, sandbox-to-Cloud-Run flow, accumulating canvas nodes, multi-model dispatch) lives across `apps/agent/src/`, `apps/bff/src/server.ts`, and `apps/frontend/src/components/canvas/`.
 
 ## About this starter
 
