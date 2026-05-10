@@ -7,8 +7,16 @@ import {
   Folder,
   FolderOpen,
   RefreshCw,
+  Terminal as TerminalIcon,
+  TreePine,
 } from "lucide-react";
-import { useCallback, useEffect, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import { useAgent } from "@copilotkit/react-core/v2";
 
 import type { WidgetSpec } from "@/lib/gpilot/types";
@@ -47,6 +55,26 @@ interface CatResponse {
   truncated: boolean;
   binaryHint: boolean;
 }
+
+interface ExecResponse {
+  command: string;
+  cwd: string | null;
+  exitCode: number;
+  output: string;
+  durationMs: number;
+}
+
+interface TerminalEntry {
+  id: string;
+  command: string;
+  cwd: string | null;
+  state:
+    | { kind: "running" }
+    | { kind: "done"; exitCode: number; output: string; durationMs: number }
+    | { kind: "error"; error: string; durationMs: number };
+}
+
+type ExplorerView = "files" | "terminal";
 
 const DEFAULT_ROOT = "/home/daytona";
 
@@ -110,6 +138,9 @@ function SandboxExplorerInner({
   sandboxStatus: string;
   startPath: string;
 }) {
+  // ----- view tabs (Files / Terminal) ------------------------------------
+  const [view, setView] = useState<ExplorerView>("files");
+
   // ----- ls cache, keyed by absolute path --------------------------------
   const [lsCache, setLsCache] = useState<
     Map<string, { entries: FileEntry[] | null; error?: string; loading: boolean }>
@@ -119,10 +150,15 @@ function SandboxExplorerInner({
   );
   const [refreshTick, setRefreshTick] = useState(0);
 
+  // ----- terminal history + input ----------------------------------------
+  const [termHistory, setTermHistory] = useState<TerminalEntry[]>([]);
+  const [termRunning, setTermRunning] = useState(false);
+
   // Reset everything when the sandbox id changes (new thread).
   useEffect(() => {
     setLsCache(new Map());
     setOpenDirs(new Set([startPath]));
+    setTermHistory([]);
   }, [sandboxId, startPath]);
 
   const loadDir = useCallback(
@@ -266,6 +302,94 @@ function SandboxExplorerInner({
 
   const closeFile = useCallback(() => setOpenFile(null), []);
 
+  // ----- terminal: run a command -----------------------------------------
+  const runCommand = useCallback(
+    async (command: string, cwd?: string) => {
+      const trimmed = command.trim();
+      if (!trimmed || termRunning) return;
+      const id = `t-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+      const startedAt = Date.now();
+      setTermHistory((prev) => [
+        ...prev,
+        {
+          id,
+          command: trimmed,
+          cwd: cwd ?? null,
+          state: { kind: "running" },
+        },
+      ]);
+      setTermRunning(true);
+      try {
+        const res = await fetch("/api/sandbox/exec", {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({
+            sid: sandboxId,
+            command: trimmed,
+            cwd,
+          }),
+        });
+        const json = (await res.json()) as Partial<ExecResponse> & {
+          error?: string;
+        };
+        const durationMs = Date.now() - startedAt;
+        if (!res.ok) {
+          setTermHistory((prev) =>
+            prev.map((e) =>
+              e.id === id
+                ? {
+                    ...e,
+                    state: {
+                      kind: "error",
+                      error: json.error ?? `HTTP ${res.status}`,
+                      durationMs,
+                    },
+                  }
+                : e,
+            ),
+          );
+          return;
+        }
+        setTermHistory((prev) =>
+          prev.map((e) =>
+            e.id === id
+              ? {
+                  ...e,
+                  state: {
+                    kind: "done",
+                    exitCode: typeof json.exitCode === "number" ? json.exitCode : -1,
+                    output: typeof json.output === "string" ? json.output : "",
+                    durationMs:
+                      typeof json.durationMs === "number" ? json.durationMs : durationMs,
+                  },
+                }
+              : e,
+          ),
+        );
+      } catch (e) {
+        setTermHistory((prev) =>
+          prev.map((entry) =>
+            entry.id === id
+              ? {
+                  ...entry,
+                  state: {
+                    kind: "error",
+                    error: e instanceof Error ? e.message : String(e),
+                    durationMs: Date.now() - startedAt,
+                  },
+                }
+              : entry,
+          ),
+        );
+      } finally {
+        setTermRunning(false);
+      }
+    },
+    [sandboxId, termRunning],
+  );
+
+  const clearTerminal = useCallback(() => setTermHistory([]), []);
+
   // ----- render -----------------------------------------------------------
   return (
     <div
@@ -278,30 +402,44 @@ function SandboxExplorerInner({
       <SandboxHeader
         sandboxId={sandboxId}
         sandboxStatus={sandboxStatus}
-        onRefresh={refreshAll}
+        view={view}
+        onChangeView={setView}
+        onRefresh={view === "files" ? refreshAll : clearTerminal}
+        refreshLabel={view === "files" ? "Refresh open folders" : "Clear terminal"}
       />
 
-      <div className="mt-2 text-[12px] font-mono leading-snug">
-        <DirNode
-          path={startPath}
-          name={startPath}
-          isRoot
-          depth={0}
-          openDirs={openDirs}
-          lsCache={lsCache}
-          onToggleDir={toggleDir}
-          onOpenFile={viewFile}
-        />
-      </div>
+      {view === "files" ? (
+        <>
+          <div className="mt-2 text-[12px] font-mono leading-snug">
+            <DirNode
+              path={startPath}
+              name={startPath}
+              isRoot
+              depth={0}
+              openDirs={openDirs}
+              lsCache={lsCache}
+              onToggleDir={toggleDir}
+              onOpenFile={viewFile}
+            />
+          </div>
 
-      {openFile ? (
-        <FileViewer
-          path={openFile.path}
-          state={openFile.state}
-          onClose={closeFile}
-          onRefresh={() => viewFile(openFile.path)}
+          {openFile ? (
+            <FileViewer
+              path={openFile.path}
+              state={openFile.state}
+              onClose={closeFile}
+              onRefresh={() => viewFile(openFile.path)}
+            />
+          ) : null}
+        </>
+      ) : (
+        <Terminal
+          history={termHistory}
+          running={termRunning}
+          defaultCwd={startPath}
+          onRun={runCommand}
         />
-      ) : null}
+      )}
     </div>
   );
 }
@@ -309,11 +447,17 @@ function SandboxExplorerInner({
 function SandboxHeader({
   sandboxId,
   sandboxStatus,
+  view,
+  onChangeView,
   onRefresh,
+  refreshLabel,
 }: {
   sandboxId: string;
   sandboxStatus: string;
+  view: ExplorerView;
+  onChangeView: (next: ExplorerView) => void;
   onRefresh: () => void;
+  refreshLabel: string;
 }) {
   return (
     <div className="flex items-center justify-between gap-2">
@@ -337,16 +481,58 @@ function SandboxHeader({
           {sandboxStatus}
         </span>
       </div>
-      <button
-        type="button"
-        onClick={onRefresh}
-        title="Refresh open folders"
-        className="inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
-        style={{ color: "var(--muted-foreground)" }}
-      >
-        <RefreshCw size={12} />
-      </button>
+      <div className="flex items-center gap-1">
+        <ViewTab
+          icon={<TreePine size={11} />}
+          label="files"
+          active={view === "files"}
+          onClick={() => onChangeView("files")}
+        />
+        <ViewTab
+          icon={<TerminalIcon size={11} />}
+          label="term"
+          active={view === "terminal"}
+          onClick={() => onChangeView("terminal")}
+        />
+        <button
+          type="button"
+          onClick={onRefresh}
+          title={refreshLabel}
+          className="ml-1 inline-flex h-6 w-6 items-center justify-center rounded-md transition-colors hover:bg-foreground/10"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          <RefreshCw size={12} />
+        </button>
+      </div>
     </div>
+  );
+}
+
+function ViewTab({
+  icon,
+  label,
+  active,
+  onClick,
+}: {
+  icon: React.ReactNode;
+  label: string;
+  active: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className="inline-flex h-6 items-center gap-1 rounded-md px-1.5 font-mono text-[9.5px] uppercase tracking-wider transition-colors"
+      style={{
+        background: active ? "var(--card)" : "transparent",
+        color: active ? "var(--foreground)" : "var(--muted-foreground)",
+        border: active ? "1px solid var(--border)" : "1px solid transparent",
+      }}
+    >
+      {icon}
+      {label}
+    </button>
   );
 }
 
@@ -608,6 +794,211 @@ function FileViewer({
           </>
         ) : null}
       </div>
+    </div>
+  );
+}
+
+// ----- Terminal ---------------------------------------------------------
+
+/**
+ * Live shell against the per-thread Daytona sandbox. Each command goes
+ * to BFF /api/sandbox/exec; output (stdout+stderr merged by Daytona)
+ * lands in the history list. Commands are appended in chronological
+ * order; auto-scroll keeps the latest in view; Up/Down browses prior
+ * commands like a regular shell.
+ */
+function Terminal({
+  history,
+  running,
+  defaultCwd,
+  onRun,
+}: {
+  history: TerminalEntry[];
+  running: boolean;
+  defaultCwd: string;
+  onRun: (command: string, cwd?: string) => void | Promise<void>;
+}) {
+  const [draft, setDraft] = useState("");
+  const [historyIdx, setHistoryIdx] = useState<number | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
+  const scrollRef = useRef<HTMLDivElement | null>(null);
+
+  // Auto-scroll on new history entries / command running state changes.
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [history, running]);
+
+  // Focus input when the terminal mounts and after every command finishes.
+  useEffect(() => {
+    if (!running) inputRef.current?.focus();
+  }, [running]);
+
+  const onKeyDown = useCallback(
+    (e: React.KeyboardEvent<HTMLInputElement>) => {
+      if (e.key === "Enter") {
+        e.preventDefault();
+        if (!draft.trim()) return;
+        const cmd = draft;
+        setDraft("");
+        setHistoryIdx(null);
+        void onRun(cmd, defaultCwd);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        if (history.length === 0) return;
+        const nextIdx =
+          historyIdx === null
+            ? history.length - 1
+            : Math.max(0, historyIdx - 1);
+        setHistoryIdx(nextIdx);
+        setDraft(history[nextIdx]?.command ?? "");
+        return;
+      }
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        if (historyIdx === null) return;
+        const nextIdx = historyIdx + 1;
+        if (nextIdx >= history.length) {
+          setHistoryIdx(null);
+          setDraft("");
+        } else {
+          setHistoryIdx(nextIdx);
+          setDraft(history[nextIdx]?.command ?? "");
+        }
+        return;
+      }
+    },
+    [draft, history, historyIdx, defaultCwd, onRun],
+  );
+
+  return (
+    <div className="mt-2 flex flex-col" style={{ minHeight: 220 }}>
+      <div
+        ref={scrollRef}
+        className="flex-1 overflow-auto rounded-md p-2 font-mono text-[11px] leading-snug"
+        style={{
+          background: "var(--card)",
+          border: "1px solid var(--border)",
+          maxHeight: 360,
+          minHeight: 160,
+        }}
+      >
+        {history.length === 0 ? (
+          <div style={{ color: "var(--muted-foreground)" }}>
+            $ type a command and press Enter — runs live in the sandbox at
+            <span style={{ color: "var(--foreground)" }}> {defaultCwd}</span>
+          </div>
+        ) : (
+          history.map((entry) => <TerminalEntryRow key={entry.id} entry={entry} />)
+        )}
+      </div>
+
+      <form
+        className="mt-1.5 flex items-center gap-1.5"
+        onSubmit={(e) => {
+          e.preventDefault();
+          if (!draft.trim() || running) return;
+          const cmd = draft;
+          setDraft("");
+          setHistoryIdx(null);
+          void onRun(cmd, defaultCwd);
+        }}
+      >
+        <span
+          className="font-mono text-[11px]"
+          style={{ color: "var(--muted-foreground)" }}
+        >
+          $
+        </span>
+        <input
+          ref={inputRef}
+          type="text"
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={onKeyDown}
+          disabled={running}
+          spellCheck={false}
+          autoComplete="off"
+          autoCapitalize="off"
+          autoCorrect="off"
+          placeholder={running ? "running…" : "ls -la"}
+          className="flex-1 rounded-md px-2 py-1 font-mono text-[11px] outline-none"
+          style={{
+            background: "var(--card)",
+            color: "var(--foreground)",
+            border: "1px solid var(--border)",
+            opacity: running ? 0.6 : 1,
+          }}
+        />
+        <button
+          type="submit"
+          disabled={running || !draft.trim()}
+          className="inline-flex h-7 items-center rounded-md px-2 font-mono text-[10px] uppercase tracking-wider transition-colors hover:bg-foreground/10 disabled:opacity-40"
+          style={{
+            background: "var(--card)",
+            color: "var(--foreground)",
+            border: "1px solid var(--border)",
+          }}
+        >
+          run
+        </button>
+      </form>
+    </div>
+  );
+}
+
+function TerminalEntryRow({ entry }: { entry: TerminalEntry }) {
+  return (
+    <div className="mb-1.5">
+      <div style={{ color: "var(--muted-foreground)" }}>
+        <span style={{ color: "var(--foreground)" }}>$</span>{" "}
+        <span style={{ color: "var(--foreground)" }}>{entry.command}</span>
+        {entry.cwd ? (
+          <span className="ml-2 text-[10px]" title={entry.cwd}>
+            (cwd: {entry.cwd})
+          </span>
+        ) : null}
+      </div>
+      {entry.state.kind === "running" ? (
+        <div style={{ color: "var(--muted-foreground)" }}>… running</div>
+      ) : null}
+      {entry.state.kind === "error" ? (
+        <div
+          style={{ color: "var(--destructive, var(--muted-foreground))" }}
+        >
+          ⚠ {entry.state.error} ({entry.state.durationMs}ms)
+        </div>
+      ) : null}
+      {entry.state.kind === "done" ? (
+        <>
+          {entry.state.output ? (
+            <pre
+              className="m-0 whitespace-pre-wrap"
+              style={{ color: "var(--foreground)" }}
+            >
+              {entry.state.output}
+            </pre>
+          ) : (
+            <div style={{ color: "var(--muted-foreground)", opacity: 0.6 }}>
+              (no output)
+            </div>
+          )}
+          <div
+            className="text-[10px]"
+            style={{
+              color:
+                entry.state.exitCode === 0
+                  ? "var(--muted-foreground)"
+                  : "var(--destructive, var(--muted-foreground))",
+            }}
+          >
+            exit {entry.state.exitCode} · {entry.state.durationMs}ms
+          </div>
+        </>
+      ) : null}
     </div>
   );
 }

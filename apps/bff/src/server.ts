@@ -215,6 +215,71 @@ app.get("/api/sandbox/ls", async (c) => {
   }
 });
 
+app.post("/api/sandbox/exec", async (c) => {
+  // Body: { sid, command, cwd?, timeout? } — runs `command` in the live
+  // per-thread sandbox via Daytona's process API. Daytona merges stdout
+  // and stderr into a single `result` field, which we surface as `output`.
+  // Timeout is capped server-side so a runaway / blocking command can't
+  // pin a sandbox indefinitely.
+  const body = (await c.req
+    .json()
+    .catch(() => null)) as
+    | { sid?: unknown; command?: unknown; cwd?: unknown; timeout?: unknown }
+    | null;
+  if (!body) return c.json({ error: "Invalid JSON body" }, 400);
+  const sid = typeof body.sid === "string" ? body.sid : undefined;
+  const command = typeof body.command === "string" ? body.command : undefined;
+  const cwd = typeof body.cwd === "string" && body.cwd ? body.cwd : undefined;
+  const requestedTimeout =
+    typeof body.timeout === "number" && body.timeout > 0 ? body.timeout : 30;
+  const timeout = Math.min(requestedTimeout, 60); // hard cap 60s
+  if (!sandboxIdLooksValid(sid)) {
+    return c.json({ error: "Missing or invalid sid" }, 400);
+  }
+  if (!command || command.length > 8000) {
+    return c.json({ error: "Missing or oversized command" }, 400);
+  }
+  const daytona = getDaytona();
+  if (!daytona) {
+    return c.json(
+      { error: "DAYTONA_API_KEY is not configured on the server." },
+      503,
+    );
+  }
+  const startedAt = Date.now();
+  try {
+    const sandbox = await daytona.get(sid);
+    const res = await sandbox.process.executeCommand(
+      command,
+      cwd,
+      undefined,
+      timeout,
+    );
+    return c.json({
+      command,
+      cwd: cwd ?? null,
+      exitCode: res.exitCode,
+      output: typeof res.result === "string" ? res.result : "",
+      durationMs: Date.now() - startedAt,
+    });
+  } catch (err: unknown) {
+    const status =
+      (err as { status?: number; response?: { status?: number } })?.status ??
+      (err as { response?: { status?: number } })?.response?.status ??
+      500;
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json(
+      {
+        error: msg,
+        command,
+        cwd: cwd ?? null,
+        durationMs: Date.now() - startedAt,
+      },
+      status === 404 ? 404 : 500,
+    );
+  }
+});
+
 app.get("/api/sandbox/cat", async (c) => {
   const sid = c.req.query("sid");
   const path = c.req.query("path");

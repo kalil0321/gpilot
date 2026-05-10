@@ -67,7 +67,11 @@ At click time, `prompt` is sent to the agent as if the user had typed it. Use it
 {"kind": "sandbox-explorer", "path"?: str /* default "/home/daytona" */}
 ```
 
-Live, interactive Daytona sandbox file tree. Reads the per-thread sandbox id from agent state and talks to Daytona DIRECTLY for `ls` (lazy folder expand on click) and `cat` (file content viewer on click). The user can poke around the running sandbox without any agent round-trip. Always render this as its own top-level node with `id: "sandbox-explorer"` (semantic id → replace in place) right after `sandbox_create` succeeds. You don't pre-pull files — the widget does that on demand.
+Live, interactive Daytona sandbox node with two internal tabs:
+  - **Files** — lazy-loaded file tree. Click a folder to `ls`, click a file to `cat` (live, no agent round-trip).
+  - **Terminal** — interactive shell. The user types commands and they run live in the sandbox via Daytona's exec API. Includes Up/Down arrow history.
+
+Reads the per-thread sandbox id from agent state. Always render this as its own top-level node with `id: "sandbox-explorer"` (semantic id → replace in place) right after `sandbox_create` succeeds. You don't pre-pull files or commands — the widget handles all interactions on demand.
 
 ## Design rules (non-negotiable)
 
