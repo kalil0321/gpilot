@@ -81,6 +81,56 @@ def _replace(_left: Any, right: Any) -> Any:
     return right
 
 
+def _merge_nodes(left: Any, right: Any) -> Any:
+    """Reducer for `dynamic_widgets`: a list of top-level canvas nodes.
+
+    Semantics:
+    - APPEND any incoming node whose `id` doesn't already exist.
+    - REPLACE in place when `id` matches an existing node.
+    - An empty incoming list is a no-op (don't wipe — use the clear
+      sentinel below). This matters because LangGraph reducers can be
+      invoked with `right=[]` during rehydration and we must not lose
+      the persisted nodes.
+    - Sentinel `{"_op": "clear"}` resets the list, keeping any
+      well-formed nodes that ride alongside it.
+
+    The frontend renders each top-level node as its own card on the
+    canvas grid; semantic ids (e.g. `billing-rollup`,
+    `resource-inventory`) let state-view re-renders naturally replace
+    their previous payload, while action nodes (`deploy-...`,
+    `repo-...`, `pr-...`) accumulate over time.
+    """
+    base = list(left) if isinstance(left, list) else []
+    incoming = list(right) if isinstance(right, list) else []
+    if not incoming:
+        return base
+
+    if any(isinstance(it, dict) and it.get("_op") == "clear" for it in incoming):
+        kept = [
+            it for it in incoming
+            if not (isinstance(it, dict) and it.get("_op") == "clear")
+        ]
+        return kept
+
+    id_to_index: dict[str, int] = {}
+    for i, it in enumerate(base):
+        if isinstance(it, dict) and isinstance(it.get("id"), str):
+            id_to_index[it["id"]] = i
+
+    merged = list(base)
+    for it in incoming:
+        if not isinstance(it, dict):
+            continue
+        node_id = it.get("id")
+        if isinstance(node_id, str) and node_id in id_to_index:
+            merged[id_to_index[node_id]] = it
+        else:
+            merged.append(it)
+            if isinstance(node_id, str):
+                id_to_index[node_id] = len(merged) - 1
+    return merged
+
+
 class GCPCanvasState(AgentState):
     """Extended agent state for the gpilot canvas.
 
@@ -99,10 +149,12 @@ class GCPCanvasState(AgentState):
     sandbox_files: NotRequired[Annotated[list[_SandboxFile], _replace]]
     sandbox_preview: NotRequired[Annotated[Optional[_SandboxPreview], _replace]]
 
-    # Agent-generated UI — populated by render_ui. The shape is
-    # intentionally `list[dict]` so the agent can emit arbitrary widget
-    # specs; the React side validates per-widget at render time.
-    dynamic_widgets: NotRequired[Annotated[list[dict[str, Any]], _replace]]
+    # Agent-generated UI — populated by render_ui. Each top-level item
+    # is a "canvas node" carrying an `id` (semantic, agent-chosen) and
+    # a widget tree. The reducer appends new nodes and replaces by id,
+    # so state-view nodes (billing-rollup, resource-inventory) update
+    # in place while action nodes (deploy-*, repo-*, pr-*) accumulate.
+    dynamic_widgets: NotRequired[Annotated[list[dict[str, Any]], _merge_nodes]]
 
 
 class GCPStateMiddleware(AgentMiddleware[GCPCanvasState, Any]):  # type: ignore[type-arg]

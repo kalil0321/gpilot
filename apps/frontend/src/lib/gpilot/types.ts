@@ -87,6 +87,9 @@ export interface SandboxPreview {
 // of crashing the canvas.
 
 export type WidgetSpec = {
+  /** Top-level canvas-node identifier. Optional on nested children;
+   *  `render_ui` auto-fills it for top-level widgets if omitted. */
+  id?: string;
   kind: string;
   [k: string]: unknown;
 };

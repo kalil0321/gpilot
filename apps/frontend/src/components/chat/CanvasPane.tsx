@@ -13,6 +13,12 @@ import {
 import { useAgent } from "@copilotkit/react-core/v2";
 
 import { SandboxTab } from "@/components/gpilot/SandboxTab";
+import {
+  NodeShell,
+  useNodeDimensions,
+  useNodeDismissal,
+  useVisibleNodes,
+} from "@/components/canvas/NodeShell";
 import { DynamicWidget } from "@/components/widgets/DynamicWidget";
 import { mergeAgentState } from "@/lib/gpilot/types";
 
@@ -61,7 +67,18 @@ export function CanvasPane({
   const { agent } = useAgent();
   const state = useMemo(() => mergeAgentState(agent?.state), [agent?.state]);
 
-  const hasRender = state.dynamic_widgets.length > 0;
+  // Per-node dismissal — keyed by `(node id, content hash)`. A node
+  // re-appears automatically when the agent re-renders it with new
+  // content (hash changes), so dismissals only suppress what the user
+  // already saw.
+  const { isDismissed, dismiss } = useNodeDismissal();
+  const visibleNodes = useVisibleNodes(state.dynamic_widgets, isDismissed);
+
+  // Per-node persisted (width, height). Updated by the NodeShell's
+  // ResizeObserver when the user drags the corner handle.
+  const { getDims, saveDims } = useNodeDimensions();
+
+  const hasRender = visibleNodes.length > 0;
   const hasSandbox =
     Boolean(state.sandbox?.id) ||
     state.terminal_log.length > 0 ||
@@ -261,7 +278,7 @@ export function CanvasPane({
         <TabBar
           activeTab={activeTab}
           onChange={setActiveTab}
-          renderCount={state.dynamic_widgets.length}
+          renderCount={visibleNodes.length}
           terminalCount={state.terminal_log.length}
           sandboxRunning={Boolean(state.sandbox?.id)}
           previewLive={state.sandbox_preview != null}
@@ -326,29 +343,48 @@ export function CanvasPane({
                   className="pointer-events-auto flex flex-col gap-3"
                   style={{ width: Math.max(200, width - 40) }}
                 >
-                  {(state.header?.title || state.header?.subtitle) ? (
-                    <header className="mb-1 flex flex-col gap-0.5">
-                      {state.header?.title ? (
-                        <span
-                          className="text-[16px] font-semibold leading-tight"
-                          style={{ color: "var(--foreground)" }}
+                  {/* Notion-board canvas: free flex-wrap layout so each
+                      node carries its own resizable width/height
+                      (persisted in localStorage by NodeShell). Nodes
+                      pack left-to-right and wrap when the row fills,
+                      so resizing one card naturally reflows the rest.
+                      Each node's title/subtitle are pulled UP into
+                      the NodeShell header and stripped from the inner
+                      widget so cards don't render their title twice. */}
+                  <div
+                    className="flex w-full flex-wrap"
+                    style={{
+                      gap: "0.75rem",
+                      alignItems: "flex-start",
+                    }}
+                  >
+                    {visibleNodes.map(({ id, hash, widget }) => {
+                      const nodeTitle =
+                        typeof widget.title === "string" ? widget.title : "";
+                      const nodeSubtitle =
+                        typeof widget.subtitle === "string"
+                          ? widget.subtitle
+                          : "";
+                      const innerWidget =
+                        nodeTitle || nodeSubtitle
+                          ? { ...widget, title: undefined, subtitle: undefined }
+                          : widget;
+                      return (
+                        <NodeShell
+                          key={id}
+                          id={id}
+                          hash={hash}
+                          dims={getDims(id)}
+                          onResize={(w, h) => saveDims(id, w, h)}
+                          onDismiss={() => dismiss(id, hash)}
+                          title={nodeTitle}
+                          subtitle={nodeSubtitle}
                         >
-                          {state.header.title}
-                        </span>
-                      ) : null}
-                      {state.header?.subtitle ? (
-                        <span
-                          className="text-[11.5px] leading-tight"
-                          style={{ color: "var(--muted-foreground)" }}
-                        >
-                          {state.header.subtitle}
-                        </span>
-                      ) : null}
-                    </header>
-                  ) : null}
-                  {state.dynamic_widgets.map((w, i) => (
-                    <DynamicWidget key={i} widget={w} />
-                  ))}
+                          <DynamicWidget widget={innerWidget} />
+                        </NodeShell>
+                      );
+                    })}
+                  </div>
                 </div>
               ) : (
                 <div
