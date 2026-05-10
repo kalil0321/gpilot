@@ -8,9 +8,24 @@ Built for the **Generative UI Global Hackathon: Agentic Interfaces**.
 
 ## Demo
 
-[![gpilot demo — 15-second preview, click for the full 81-second video](media/demo.gif)](media/demo.mp4)
-
-▶ **[Watch the full 81-second demo](media/demo.mp4)** (MP4, 2.8 MB) — opens in GitHub's video player.
+<table>
+  <tr>
+    <td width="62%">
+      <a href="media/demo.mp4">
+        <img src="media/demo.gif" alt="gpilot demo — 15-second preview, click for the full 81-second video" />
+      </a>
+    </td>
+    <td width="38%" valign="top">
+      <strong>The prompt that produced this:</strong>
+      <br><br>
+      <em>"How much have I spent this month? Now break it down day by day. List my resources. Build me a small Game-of-Life web app, push it to a new repo <code>gpilot-life</code>, and deploy to Cloud Run so I can share the URL."</em>
+      <br><br>
+      Five turns, five canvas cards, one live URL. ~3 minutes end-to-end.
+      <br><br>
+      ▶ <a href="media/demo.mp4"><strong>Full 81-second video</strong></a> (MP4, 2.8 MB)
+    </td>
+  </tr>
+</table>
 
 ## What it does
 
@@ -19,12 +34,6 @@ Built for the **Generative UI Global Hackathon: Agentic Interfaces**.
 - **Sandbox-to-deploy.** Per-thread Daytona sandbox writes source files, pushes to a fresh GitHub repo, then runs `gcloud run deploy --source .` — the live URL lands on the canvas as a clickable card.
 - **Generative canvas.** Each agent action becomes a node — frosted card with title, content, hover-to-dismiss, drag-to-resize. State views (billing, inventory) replace in place; action records (deploy, repo, PR) accumulate as a chronological trail.
 - **Multi-model.** Switch between Gemini Flash Lite / Pro, Claude Sonnet / Opus 4.6–4.7, GPT-5.3 Codex / 5.4 per turn from the model picker — selection persists in localStorage.
-
-## Demo target
-
-> *"How much have I spent this month? Now break it down day by day. List my resources. Build me a small Game-of-Life web app, push it to a new repo `gpilot-life`, and deploy to Cloud Run so I can share the URL."*
-
-Five turns, five canvas cards, one live URL. ~3 minutes end-to-end.
 
 ---
 
