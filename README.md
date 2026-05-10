@@ -6,9 +6,9 @@ Built for the **Generative UI Global Hackathon: Agentic Interfaces**.
 
 ## Demo
 
-<video src="https://github.com/kalil0321/gpilot/raw/main/media/demo.mp4" controls width="100%"></video>
+[![gpilot demo — 15-second preview, click for the full 81-second video](media/demo.gif)](media/demo.mp4)
 
-If the embedded player doesn't load in your client, [download / view the file directly](media/demo.mp4).
+▶ **[Watch the full 81-second demo](media/demo.mp4)** (MP4, 2.8 MB) — opens in GitHub's video player.
 
 ## What it does
 
