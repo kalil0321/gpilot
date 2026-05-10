@@ -15,11 +15,53 @@ const intelligence = new CopilotKitIntelligence({
   wsUrl: process.env.INTELLIGENCE_GATEWAY_WS_URL ?? "ws://localhost:4403",
 });
 
+// LangGraph 0.6+ rejects requests that set both `config.configurable` and
+// `context` ("Cannot specify both configurable and context. Prefer setting
+// context alone.").
+//
+// The AG-UI LangGraph adapter (@ag-ui/langgraph) builds the request payload
+// as: `{ ..., config: w, context: { ...input.context, ...w.configurable } }`.
+// It mirrors `forwardedProps.config.configurable` into BOTH places, which
+// trips the server-side guard.
+//
+// We don't want to fork the adapter for one line, so we wrap the underlying
+// langgraph-sdk client and strip `configurable` from `config` right before
+// the wire send. The `context` half already carries the same values, and
+// the agent middleware reads them from `request.runtime.context` (see
+// `apps/agent/src/model_dispatch.py`).
+const langGraphClient = new LangGraphClient({
+  apiUrl: process.env.LANGGRAPH_DEPLOYMENT_URL ?? "http://localhost:8123",
+  apiKey: process.env.LANGSMITH_API_KEY ?? "",
+});
+
+type StreamPayload = { config?: { configurable?: unknown } } & Record<string, unknown>;
+const originalRunsStream = langGraphClient.runs.stream.bind(langGraphClient.runs);
+langGraphClient.runs.stream = ((
+  threadId: string | null,
+  assistantId: string,
+  payload?: StreamPayload,
+) => {
+  if (
+    payload?.context &&
+    payload.config &&
+    typeof payload.config === "object" &&
+    "configurable" in payload.config &&
+    payload.config.configurable
+  ) {
+    const { configurable: _drop, ...restConfig } = payload.config as {
+      configurable?: unknown;
+    };
+    payload = { ...payload, config: restConfig };
+  }
+  return originalRunsStream(threadId as string, assistantId, payload as never);
+}) as typeof langGraphClient.runs.stream;
+
 const agent = new LangGraphAgent({
   deploymentUrl:
     process.env.LANGGRAPH_DEPLOYMENT_URL ?? "http://localhost:8123",
   graphId: "default",
   langsmithApiKey: process.env.LANGSMITH_API_KEY ?? "",
+  client: langGraphClient,
   // The deep-agent middleware chain (todo / filesystem / subagents /
   // summarization) eats ~6-8 graph steps per real model→tools round
   // trip, so the effective ceiling is recursion_limit / 7. We bumped

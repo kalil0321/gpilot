@@ -12,6 +12,7 @@ import {
 import { CanvasPane } from "@/components/chat/CanvasPane";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ChatMessages } from "@/components/chat/ChatMessages";
+import { useSelectedModel } from "@/components/chat/ModelSelector";
 import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ThreadsDrawer } from "@/components/threads-drawer";
 import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
@@ -171,6 +172,7 @@ function ChatLayoutInner({
   const router = useRouter();
   const { agent } = useAgent();
   const { copilotkit } = useCopilotKit();
+  const { option: model } = useSelectedModel();
 
   const [busy, setBusy] = useState(false);
   const [isNewThread] = useState(() => {
@@ -313,7 +315,24 @@ function ChatLayoutInner({
         } else {
           agent.addMessage(userMsg);
         }
-        await copilotkit.runAgent({ agent });
+        // Ship the chosen model into `forwardedProps.config.configurable`.
+        // AG-UI's LangGraph adapter mirrors that into the run's `context`,
+        // and the agent's `ModelDispatchMiddleware` reads
+        // `request.runtime.context.{agent_model, agent_model_provider}`
+        // to override `request.model` for THIS turn. The BFF strips the
+        // legacy `configurable` field before sending so LangGraph 0.6+
+        // doesn't reject the dual presence — see `apps/bff/src/server.ts`.
+        await copilotkit.runAgent({
+          agent,
+          forwardedProps: {
+            config: {
+              configurable: {
+                agent_model: model.value,
+                agent_model_provider: model.provider,
+              },
+            },
+          },
+        });
       } catch (err) {
         console.error("runAgent failed", err);
         if (isUnusableThreadError(err)) router.replace("/");
@@ -321,7 +340,7 @@ function ChatLayoutInner({
         setBusy(false);
       }
     },
-    [agent, busy, copilotkit, router],
+    [agent, busy, copilotkit, router, model.value, model.provider],
   );
 
   // Flush any queued message from the entry-page mount. Gated on
