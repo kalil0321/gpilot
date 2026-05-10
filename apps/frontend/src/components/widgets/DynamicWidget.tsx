@@ -20,6 +20,7 @@ import {
 
 import type { WidgetSpec } from "@/lib/gpilot/types";
 import { useWidgetActions } from "@/lib/gpilot/widget-actions";
+import { SandboxExplorer } from "@/components/widgets/SandboxExplorer";
 
 /**
  * Recursive widget renderer for the agent-generated UI surface.
@@ -82,6 +83,8 @@ export function DynamicWidget({ widget }: { widget: WidgetSpec }) {
       return <Progress widget={widget} />;
     case "button":
       return <ButtonWidget widget={widget} />;
+    case "sandbox-explorer":
+      return <SandboxExplorer widget={widget} />;
     default:
       return <UnknownWidget kind={String(widget.kind)} />;
   }

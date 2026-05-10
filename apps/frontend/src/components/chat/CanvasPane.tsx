@@ -100,22 +100,46 @@ export function CanvasPane({
     }
   }, [activeTab]);
 
-  // Auto-open + auto-switch on a new tool-driven sync. We watch
-  // `sync.syncedAt` because it changes on every successful canvas
-  // tool call (and rehydrated threads keep the persisted value through
-  // the first render unchanged, so we don't accidentally reopen on load).
+  // Auto-open + auto-switch on a new tool-driven sync. Two policies:
+  //   - source === "ui" (render_ui) → ALWAYS switch to the canvas tab
+  //     so the user sees what just got drawn.
+  //   - source === "daytona" → switch to the sandbox tab ONLY on the
+  //     FIRST appearance of the per-thread sandbox id. Subsequent
+  //     sandbox events (file writes, shell execs, port exposes) leave
+  //     the user wherever they currently are — once the sandbox is
+  //     live, the canvas surface is usually more interesting.
+  //
+  // We watch `sync.syncedAt` because it changes on every successful
+  // canvas tool call (and rehydrated threads keep the persisted value
+  // through the first render unchanged, so we don't accidentally
+  // reopen on load).
   const prevSyncedAtRef = useRef<string | undefined>(state.sync?.syncedAt);
+  const sawSandboxIdRef = useRef<string | null>(null);
   useEffect(() => {
     const prev = prevSyncedAtRef.current;
     const cur = state.sync?.syncedAt;
     if (cur && cur !== prev) {
       const src = state.sync?.source ?? "";
-      if (src === "daytona") setActiveTab("sandbox");
-      else setActiveTab("canvas");
+      if (src === "ui") {
+        setActiveTab("canvas");
+      } else if (src === "daytona") {
+        const sandboxId = state.sandbox?.id ?? null;
+        // First time we see this sandbox id: switch tabs once.
+        if (sandboxId && sawSandboxIdRef.current !== sandboxId) {
+          setActiveTab("sandbox");
+          sawSandboxIdRef.current = sandboxId;
+        }
+      }
       if (hasContent) onContentArrived?.();
     }
     prevSyncedAtRef.current = cur;
-  }, [state.sync?.syncedAt, state.sync?.source, hasContent, onContentArrived]);
+  }, [
+    state.sync?.syncedAt,
+    state.sync?.source,
+    state.sandbox?.id,
+    hasContent,
+    onContentArrived,
+  ]);
 
   // ----- resize handle -----------------------------------------------------
   const [dragging, setDragging] = useState(false);

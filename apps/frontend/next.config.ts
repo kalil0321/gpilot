@@ -27,6 +27,12 @@ const nextConfig: NextConfig = {
         source: "/api/copilotkit",
         destination: `${BFF_URL}/api/copilotkit`,
       },
+      // Daytona sandbox file-system proxy used by the sandbox-explorer
+      // canvas node (live ls/cat into the per-thread sandbox).
+      {
+        source: "/api/sandbox/:path*",
+        destination: `${BFF_URL}/api/sandbox/:path*`,
+      },
     ];
   },
 };

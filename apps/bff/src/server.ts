@@ -6,6 +6,7 @@ import {
 } from "@copilotkit/runtime/v2";
 import { LangGraphAgent } from "@copilotkit/runtime/langgraph";
 import { Client as LangGraphClient } from "@langchain/langgraph-sdk";
+import { Daytona, type DaytonaConfig } from "@daytonaio/sdk";
 import { Hono } from "hono";
 
 const intelligence = new CopilotKitIntelligence({
@@ -142,6 +143,121 @@ app.get("/api/copilotkit/thread-state/:threadId", async (c) => {
       500;
     const msg = err instanceof Error ? err.message : String(err);
     return c.json({ error: msg }, status === 404 ? 404 : 500);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Daytona sandbox file proxy.
+//
+// The agent owns the per-thread sandbox via the Python Daytona SDK. The
+// frontend's sandbox-explorer node needs to LIST and READ files from
+// that same live sandbox to support click-to-inspect. Rather than
+// piping the request through the agent (which would have to round-trip
+// through LangGraph), we reach Daytona directly with our own TS SDK
+// client — it just needs the sandbox id (which the frontend already
+// reads from agent.state.sandbox.id) and the API key (server-side env).
+//
+// `cat` truncates to MAX_CAT_BYTES so a careless click on a giant log
+// file doesn't ship megabytes to the browser. The truncation is
+// signaled in the JSON envelope (`truncated: true, totalBytes: N`).
+// ---------------------------------------------------------------------------
+const MAX_CAT_BYTES = 200 * 1024; // 200 KB
+
+let daytonaClient: Daytona | null = null;
+function getDaytona(): Daytona | null {
+  if (daytonaClient) return daytonaClient;
+  const apiKey = process.env.DAYTONA_API_KEY?.trim();
+  if (!apiKey) return null;
+  const apiUrl = process.env.DAYTONA_API_URL?.trim();
+  const config: DaytonaConfig = apiUrl ? { apiKey, apiUrl } : { apiKey };
+  daytonaClient = new Daytona(config);
+  return daytonaClient;
+}
+
+function sandboxIdLooksValid(sid: string | undefined): sid is string {
+  // Daytona ids are uuids in practice; we just want to reject obvious
+  // garbage / empty without overcommitting to a specific format.
+  return typeof sid === "string" && sid.length > 0 && sid.length < 200;
+}
+
+app.get("/api/sandbox/ls", async (c) => {
+  const sid = c.req.query("sid");
+  const path = c.req.query("path") ?? ".";
+  if (!sandboxIdLooksValid(sid)) {
+    return c.json({ error: "Missing or invalid sid" }, 400);
+  }
+  const daytona = getDaytona();
+  if (!daytona) {
+    return c.json(
+      { error: "DAYTONA_API_KEY is not configured on the server." },
+      503,
+    );
+  }
+  try {
+    const sandbox = await daytona.get(sid);
+    const files = await sandbox.fs.listFiles(path);
+    return c.json({
+      path,
+      entries: files.map((f) => ({
+        name: f.name,
+        isDir: f.isDir,
+        size: f.size,
+        modTime: f.modTime,
+      })),
+    });
+  } catch (err: unknown) {
+    const status =
+      (err as { status?: number; response?: { status?: number } })?.status ??
+      (err as { response?: { status?: number } })?.response?.status ??
+      500;
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg, path }, status === 404 ? 404 : 500);
+  }
+});
+
+app.get("/api/sandbox/cat", async (c) => {
+  const sid = c.req.query("sid");
+  const path = c.req.query("path");
+  if (!sandboxIdLooksValid(sid)) {
+    return c.json({ error: "Missing or invalid sid" }, 400);
+  }
+  if (!path) {
+    return c.json({ error: "Missing path" }, 400);
+  }
+  const daytona = getDaytona();
+  if (!daytona) {
+    return c.json(
+      { error: "DAYTONA_API_KEY is not configured on the server." },
+      503,
+    );
+  }
+  try {
+    const sandbox = await daytona.get(sid);
+    const buf: Buffer = await sandbox.fs.downloadFile(path);
+    const totalBytes = buf.byteLength;
+    const truncated = totalBytes > MAX_CAT_BYTES;
+    const body = truncated ? buf.subarray(0, MAX_CAT_BYTES) : buf;
+    // Best-effort UTF-8 decode. Binary files come back as garbled
+    // text — the frontend renders them in a monospace block anyway,
+    // so the user sees they grabbed something non-text and can move
+    // on. We mark `binaryHint` when the buffer contains many NULs.
+    const text = body.toString("utf-8");
+    const nulCount = (text.match(/\0/g) ?? []).length;
+    const binaryHint = nulCount > 8;
+    return c.json({
+      path,
+      content: text,
+      totalBytes,
+      truncated,
+      binaryHint,
+    });
+  } catch (err: unknown) {
+    const status =
+      (err as { status?: number; response?: { status?: number } })?.status ??
+      (err as { response?: { status?: number } })?.response?.status ??
+      500;
+    const msg = err instanceof Error ? err.message : String(err);
+    return c.json({ error: msg, path }, status === 404 ? 404 : 500);
   }
 });
 
