@@ -4,6 +4,12 @@
 
 Built for the **Generative UI Global Hackathon: Agentic Interfaces**.
 
+## Demo
+
+<video src="https://github.com/kalil0321/gpilot/raw/main/media/demo.mp4" controls width="100%"></video>
+
+If the embedded player doesn't load in your client, [download / view the file directly](media/demo.mp4).
+
 ## What it does
 
 - **Billing-aware chat.** *"How much did I spend this month?"* → live BigQuery query against your billing export, results rendered as a KPI + chart node on the canvas.
