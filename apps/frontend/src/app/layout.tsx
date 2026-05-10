@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 
 import { Figtree, Spline_Sans_Mono } from "next/font/google";
 import { CopilotKitProviderShell } from "@/components/copilot/CopilotKitProviderShell";
+import { AppProviders } from "@/components/providers/app-providers";
 import "./globals.css";
 // v2 owns its own stylesheet. Do NOT import @copilotkit/react-ui/styles.css —
 // v1's .copilotKitButton / .copilotKitSidebar / .copilotKitWindow rules
@@ -60,7 +61,9 @@ export default function RootLayout({
   return (
     <html lang="en" className={`${figtree.variable} ${splineMono.variable}`}>
       <body className={`${figtree.variable} ${splineMono.variable} subpixel-antialiased`}>
-        <CopilotKitProviderShell>{children}</CopilotKitProviderShell>
+        <AppProviders>
+          <CopilotKitProviderShell>{children}</CopilotKitProviderShell>
+        </AppProviders>
       </body>
     </html>
   );

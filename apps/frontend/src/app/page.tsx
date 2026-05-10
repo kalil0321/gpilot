@@ -8,7 +8,6 @@ import { ThemeToggle } from "@/components/brand/ThemeToggle";
 import { ChatInput } from "@/components/chat/ChatInput";
 import { ThreadsDrawer } from "@/components/threads-drawer";
 import drawerStyles from "@/components/threads-drawer/threads-drawer.module.css";
-import { ThemeProvider } from "@/hooks/use-theme";
 
 const SUGGESTIONS = [
   "Show me my GCP spend",
@@ -191,10 +190,8 @@ function getGreetingPunctuation() {
 
 export default function Page() {
   return (
-    <ThemeProvider>
-      <ClientOnly>
-        <Entry />
-      </ClientOnly>
-    </ThemeProvider>
+    <ClientOnly>
+      <Entry />
+    </ClientOnly>
   );
 }
